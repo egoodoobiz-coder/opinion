@@ -1,0 +1,8 @@
+uploads = []
+outputs = []
+
+[[generated]]
+id = "VErx95-9slz_dT57HWxtn"
+uri = "file://artifacts/mobile/assets/images/icon.png"
+type = "image"
+title = "rankit app icon"
