@@ -47,7 +47,7 @@ export default function ExploreScreen() {
       <View
         style={[
           s.header,
-          { paddingTop: Platform.OS === "web" ? 67 : insets.top + 12 },
+          { paddingTop: Platform.OS === "web" ? 16 : insets.top + 12 },
         ]}
       >
         <Text style={s.title}>Explore</Text>
@@ -100,7 +100,7 @@ export default function ExploreScreen() {
           contentContainerStyle={[
             s.list,
             {
-              paddingBottom: Platform.OS === "web" ? 100 : insets.bottom + 80,
+              paddingBottom: Platform.OS === "web" ? 70 : insets.bottom + 80,
             },
           ]}
           renderItem={({ item }) => (
