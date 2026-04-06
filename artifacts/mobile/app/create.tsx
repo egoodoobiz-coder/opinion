@@ -2,7 +2,7 @@ import { useAuth, useUser } from "@clerk/expo";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { type Href, useRouter } from "expo-router";
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import {
   Alert,
   Platform,
@@ -30,8 +30,8 @@ export default function CreateScreen() {
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState<Category>("other");
   const [votingTypes, setVotingTypes] = useState<VotingType[]>(["yesno"]);
-  const [rankOptions, setRankOptions] = useState(["Option A", "Option B", "Option C"]);
-  const [newOption, setNewOption] = useState("");
+  const [rankOptions, setRankOptions] = useState<string[]>(["", ""]);
+  const inputRefs = useRef<Array<TextInput | null>>([]);
 
   const needsRankOptions = votingTypes.includes("ranking");
 
@@ -46,16 +46,23 @@ export default function CreateScreen() {
     );
   }
 
+  function updateRankOption(idx: number, text: string) {
+    setRankOptions((prev) => prev.map((o, i) => (i === idx ? text : o)));
+  }
+
   function addRankOption() {
-    if (newOption.trim() && rankOptions.length < 8) {
-      setRankOptions([...rankOptions, newOption.trim()]);
-      setNewOption("");
-    }
+    if (rankOptions.length >= 8) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setRankOptions((prev) => [...prev, ""]);
+    setTimeout(() => {
+      inputRefs.current[rankOptions.length]?.focus();
+    }, 80);
   }
 
   function removeRankOption(idx: number) {
     if (rankOptions.length <= 2) return;
-    setRankOptions(rankOptions.filter((_, i) => i !== idx));
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setRankOptions((prev) => prev.filter((_, i) => i !== idx));
   }
 
   function submit() {
@@ -67,12 +74,15 @@ export default function CreateScreen() {
       Alert.alert("Missing title", "Please enter a topic title.");
       return;
     }
-    if (needsRankOptions && rankOptions.filter((o) => o.trim()).length < 2) {
+    const validRankOpts = rankOptions.filter((o) => o.trim());
+    if (needsRankOptions && validRankOpts.length < 2) {
       Alert.alert("Ranking options", "Add at least 2 options for ranking.");
       return;
     }
     const isPremium = (user?.unsafeMetadata as any)?.isPremium === true;
-    const accountType = isPremium ? (user?.unsafeMetadata as any)?.accountType : undefined;
+    const accountType = isPremium
+      ? (user?.unsafeMetadata as any)?.accountType
+      : undefined;
     addTopic(
       {
         title: title.trim(),
@@ -80,12 +90,10 @@ export default function CreateScreen() {
         category,
         votingTypes,
         rankingOptions: needsRankOptions
-          ? rankOptions
-              .filter((o) => o.trim())
-              .map((label, i) => ({
-                id: `opt_${i}_${Date.now()}`,
-                label: label.trim(),
-              }))
+          ? validRankOpts.map((label, i) => ({
+              id: `opt_${i}_${Date.now()}`,
+              label: label.trim(),
+            }))
           : undefined,
       },
       accountType
@@ -127,6 +135,7 @@ export default function CreateScreen() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
+        {/* Title */}
         <View style={s.field}>
           <Text style={s.label}>Topic Title *</Text>
           <TextInput
@@ -141,6 +150,7 @@ export default function CreateScreen() {
           <Text style={s.charCount}>{title.length}/120</Text>
         </View>
 
+        {/* Description */}
         <View style={s.field}>
           <Text style={s.label}>Description</Text>
           <TextInput
@@ -154,6 +164,7 @@ export default function CreateScreen() {
           />
         </View>
 
+        {/* Category */}
         <View style={s.field}>
           <Text style={s.label}>Category</Text>
           <View style={s.catGrid}>
@@ -194,6 +205,7 @@ export default function CreateScreen() {
           </View>
         </View>
 
+        {/* Voting Types */}
         <View style={s.field}>
           <Text style={s.label}>Voting Types</Text>
           <Text style={s.sublabel}>Choose how people can vote</Text>
@@ -240,45 +252,73 @@ export default function CreateScreen() {
           </View>
         </View>
 
+        {/* Ranking Options */}
         {needsRankOptions && (
           <View style={s.field}>
             <Text style={s.label}>Ranking Options</Text>
-            <Text style={s.sublabel}>Add 2–8 items to rank</Text>
+            <Text style={s.sublabel}>Add 2–8 items for people to rank</Text>
             <View style={s.rankOptions}>
               {rankOptions.map((opt, idx) => (
                 <View key={idx} style={s.rankOptionRow}>
                   <View style={s.rankBadge}>
                     <Text style={s.rankBadgeNum}>{idx + 1}</Text>
                   </View>
-                  <Text style={s.rankOptionLabel}>{opt}</Text>
-                  <Pressable
-                    onPress={() => removeRankOption(idx)}
-                    style={({ pressed }) => [s.removeBtn, pressed && { opacity: 0.5 }]}
-                  >
-                    <Feather name="x" size={14} color={colors.mutedForeground} />
-                  </Pressable>
+                  <TextInput
+                    ref={(ref) => {
+                      inputRefs.current[idx] = ref;
+                    }}
+                    style={s.rankOptionInput}
+                    placeholder={`Option ${idx + 1}`}
+                    placeholderTextColor={colors.mutedForeground}
+                    value={opt}
+                    onChangeText={(t) => updateRankOption(idx, t)}
+                    returnKeyType={idx < rankOptions.length - 1 ? "next" : "done"}
+                    onSubmitEditing={() => {
+                      if (idx < rankOptions.length - 1) {
+                        inputRefs.current[idx + 1]?.focus();
+                      } else if (rankOptions.length < 8) {
+                        addRankOption();
+                      }
+                    }}
+                    blurOnSubmit={false}
+                  />
+                  {rankOptions.length > 2 && (
+                    <Pressable
+                      onPress={() => removeRankOption(idx)}
+                      hitSlop={8}
+                      style={({ pressed }) => [
+                        s.removeBtn,
+                        pressed && { opacity: 0.5 },
+                      ]}
+                    >
+                      <Feather
+                        name="x"
+                        size={16}
+                        color={colors.mutedForeground}
+                      />
+                    </Pressable>
+                  )}
                 </View>
               ))}
 
               {rankOptions.length < 8 && (
-                <View style={s.addOptionRow}>
-                  <TextInput
-                    style={s.addOptionInput}
-                    placeholder="Add option..."
-                    placeholderTextColor={colors.mutedForeground}
-                    value={newOption}
-                    onChangeText={setNewOption}
-                    onSubmitEditing={addRankOption}
-                    returnKeyType="done"
+                <Pressable
+                  style={({ pressed }) => [
+                    s.addOptionBtn,
+                    pressed && { opacity: 0.7 },
+                  ]}
+                  onPress={addRankOption}
+                >
+                  <Feather
+                    name="plus-circle"
+                    size={16}
+                    color={colors.primary}
                   />
-                  <Pressable
-                    style={[s.addBtn, !newOption.trim() && s.addBtnDisabled]}
-                    onPress={addRankOption}
-                    disabled={!newOption.trim()}
-                  >
-                    <Feather name="plus" size={16} color={colors.primaryForeground} />
-                  </Pressable>
-                </View>
+                  <Text style={s.addOptionText}>Add another option</Text>
+                  <Text style={s.addOptionCount}>
+                    {rankOptions.length}/8
+                  </Text>
+                </Pressable>
               )}
             </View>
           </View>
@@ -399,54 +439,60 @@ const styles = (colors: ReturnType<typeof useColors>, insets: any) =>
     rankOptionRow: {
       flexDirection: "row",
       alignItems: "center",
-      backgroundColor: colors.muted,
-      borderRadius: 12,
-      padding: 10,
       gap: 10,
     },
     rankBadge: {
-      width: 26,
-      height: 26,
-      borderRadius: 13,
-      backgroundColor: colors.primary + "33",
+      width: 30,
+      height: 30,
+      borderRadius: 15,
+      backgroundColor: colors.primary + "22",
       alignItems: "center",
       justifyContent: "center",
+      flexShrink: 0,
     },
     rankBadgeNum: {
-      fontSize: 12,
+      fontSize: 13,
       fontWeight: "700",
       color: colors.primary,
     },
-    rankOptionLabel: {
-      flex: 1,
-      fontSize: 14,
-      color: colors.foreground,
-    },
-    removeBtn: {
-      padding: 4,
-    },
-    addOptionRow: {
-      flexDirection: "row",
-      gap: 8,
-      alignItems: "center",
-    },
-    addOptionInput: {
+    rankOptionInput: {
       flex: 1,
       backgroundColor: colors.muted,
       borderRadius: 12,
-      padding: 12,
-      fontSize: 14,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      fontSize: 15,
       color: colors.foreground,
       borderWidth: 1,
       borderColor: colors.border,
     },
-    addBtn: {
-      width: 42,
-      height: 42,
-      borderRadius: 12,
-      backgroundColor: colors.primary,
+    removeBtn: {
+      width: 30,
+      height: 30,
       alignItems: "center",
       justifyContent: "center",
+      flexShrink: 0,
     },
-    addBtnDisabled: { opacity: 0.4 },
+    addOptionBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+      paddingVertical: 12,
+      paddingHorizontal: 14,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.primary + "55",
+      borderStyle: "dashed",
+      marginTop: 2,
+    },
+    addOptionText: {
+      flex: 1,
+      fontSize: 14,
+      color: colors.primary,
+      fontWeight: "600",
+    },
+    addOptionCount: {
+      fontSize: 12,
+      color: colors.mutedForeground,
+    },
   });
