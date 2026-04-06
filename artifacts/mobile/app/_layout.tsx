@@ -44,6 +44,14 @@ function RootLayoutNav() {
         name="edit-profile"
         options={{ headerShown: false, presentation: "modal" }}
       />
+      <Stack.Screen
+        name="verify-request"
+        options={{ headerShown: false, presentation: "modal" }}
+      />
+      <Stack.Screen
+        name="admin"
+        options={{ headerShown: false, presentation: "modal" }}
+      />
     </Stack>
   );
 }

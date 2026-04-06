@@ -2,7 +2,7 @@ import { useAuth, useUser } from "@clerk/expo";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -24,7 +24,7 @@ type AccountType = "regular" | "company" | "celebrity";
 export default function ProfileScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { isSignedIn, isLoaded, signOut } = useAuth();
+  const { isSignedIn, isLoaded, signOut, getToken } = useAuth();
   const { user } = useUser();
   const router = useRouter();
   const { topics, userVotes, userId } = useApp();
@@ -32,6 +32,35 @@ export default function ProfileScreen() {
 
   const isPremium = (user?.unsafeMetadata as any)?.isPremium === true;
   const accountType: AccountType = (user?.unsafeMetadata as any)?.accountType ?? "regular";
+  const isAdmin = (user?.unsafeMetadata as any)?.isAdmin === true;
+
+  const API_URL = process.env.EXPO_PUBLIC_API_URL ?? "";
+
+  // Auto-activate premium if verification request was approved
+  useEffect(() => {
+    if (!isSignedIn || !user || isPremium) return;
+    async function checkVerification() {
+      try {
+        const token = await getToken();
+        const res = await fetch(`${API_URL}/admin/verify-requests/me`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        const approved = (data.requests ?? []).find((r: any) => r.status === "approved");
+        if (approved) {
+          await user!.update({
+            unsafeMetadata: {
+              ...(user!.unsafeMetadata as any),
+              isPremium: true,
+              accountType: approved.requestedAccountType,
+            },
+          });
+        }
+      } catch {}
+    }
+    checkVerification();
+  }, [isSignedIn, isPremium]);
 
   const clerkUserId = user?.id ?? userId;
 
@@ -226,25 +255,40 @@ export default function ProfileScreen() {
           </View>
         </View>
 
+        {/* Admin panel button */}
+        {isAdmin && (
+          <Pressable
+            style={({ pressed }) => [s.adminBtn, pressed && { opacity: 0.8 }]}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              router.push("/admin");
+            }}
+          >
+            <Feather name="shield" size={16} color={colors.primary} />
+            <Text style={s.adminBtnText}>Admin Panel</Text>
+            <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
+          </Pressable>
+        )}
+
         {/* Premium upgrade */}
         {!isPremium && (
           <View style={s.premiumCard}>
             <View style={s.premiumHeader}>
               <Feather name="star" size={18} color={colors.star} />
-              <Text style={s.premiumTitle}>Go Premium</Text>
+              <Text style={s.premiumTitle}>Get Verified</Text>
             </View>
             <Text style={s.premiumSubtitle}>
-              Get a verified badge, promote your topics, and unlock detailed analytics
+              Apply for a verified badge as a Company or Celebrity account and unlock analytics
             </Text>
             <Pressable
-              style={({ pressed }) => [s.upgradeBtn, s.upgradeBtnPrimary, pressed && { opacity: 0.8 }]}
+              style={({ pressed }) => [s.upgradeBtn, s.upgradeBtnVerify, pressed && { opacity: 0.8 }]}
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                router.push("/upgrade");
+                router.push("/verify-request");
               }}
             >
-              <Feather name="star" size={15} color="#fff" />
-              <Text style={s.upgradeBtnText}>View Plans & Pricing</Text>
+              <Feather name="check-circle" size={15} color="#fff" />
+              <Text style={s.upgradeBtnText}>Apply for Verification</Text>
             </Pressable>
           </View>
         )}
@@ -434,6 +478,24 @@ const styles = (colors: ReturnType<typeof useColors>, insets: any) =>
     statNum: { fontSize: 22, fontWeight: "800", color: colors.primary },
     statLabel: { fontSize: 11, color: colors.mutedForeground, fontWeight: "500" },
     statDivider: { width: 1, height: 32, backgroundColor: colors.border },
+    adminBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+      marginHorizontal: 16,
+      marginBottom: 12,
+      backgroundColor: colors.card,
+      borderRadius: 14,
+      padding: 14,
+      borderWidth: 1,
+      borderColor: colors.primary + "44",
+    },
+    adminBtnText: {
+      flex: 1,
+      fontSize: 15,
+      fontWeight: "700",
+      color: colors.foreground,
+    },
     premiumCard: {
       margin: 16,
       marginTop: 0,
@@ -456,6 +518,7 @@ const styles = (colors: ReturnType<typeof useColors>, insets: any) =>
       borderRadius: 12,
     },
     upgradeBtnPrimary: { backgroundColor: colors.primary },
+    upgradeBtnVerify: { backgroundColor: colors.yes },
     upgradeBtnText: { fontSize: 14, fontWeight: "700", color: "#fff" },
     analyticsCard: {
       margin: 16,

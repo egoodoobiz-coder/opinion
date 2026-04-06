@@ -1,44 +1,44 @@
 const colors = {
   light: {
-    text: "#0f0a1e",
-    tint: "#7c3aed",
+    text: "#e7e9ea",
+    tint: "#1d9bf0",
 
-    background: "#0f0a1e",
-    foreground: "#f5f0ff",
+    background: "#000000",
+    foreground: "#e7e9ea",
 
-    card: "#1a1230",
-    cardForeground: "#f5f0ff",
+    card: "#16181c",
+    cardForeground: "#e7e9ea",
 
-    primary: "#7c3aed",
+    primary: "#1d9bf0",
     primaryForeground: "#ffffff",
 
-    secondary: "#2d1f5e",
-    secondaryForeground: "#c4b5fd",
+    secondary: "#202327",
+    secondaryForeground: "#e7e9ea",
 
-    muted: "#1e1538",
-    mutedForeground: "#8b7aaa",
+    muted: "#202327",
+    mutedForeground: "#71767b",
 
-    accent: "#a855f7",
+    accent: "#1d9bf0",
     accentForeground: "#ffffff",
 
-    destructive: "#ef4444",
+    destructive: "#f4212e",
     destructiveForeground: "#ffffff",
 
-    border: "#2d1f5e",
-    input: "#2d1f5e",
+    border: "#2f3336",
+    input: "#2f3336",
 
     // App-specific tokens
-    yes: "#22c55e",
-    no: "#ef4444",
-    star: "#f59e0b",
-    rank: "#3b82f6",
-    rankBg: "#1e3a5f",
-    yesBg: "#14532d",
-    noBg: "#450a0a",
-    starBg: "#451a03",
+    yes: "#00ba7c",
+    no: "#f4212e",
+    star: "#ffd400",
+    rank: "#1d9bf0",
+    rankBg: "#031824",
+    yesBg: "#003320",
+    noBg: "#2d0a0b",
+    starBg: "#2d2200",
 
-    surface: "#150f2a",
-    elevated: "#1e1538",
+    surface: "#0d0d0d",
+    elevated: "#1c1c1c",
   },
 
   radius: 14,
