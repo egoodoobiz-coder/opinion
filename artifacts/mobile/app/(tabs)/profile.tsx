@@ -150,9 +150,7 @@ export default function ProfileScreen() {
 
     const voteTypeBreakdown = myTopics.reduce(
       (acc, t) => {
-        t.votingTypes.forEach((vt: VotingType) => {
-          acc[vt] = (acc[vt] ?? 0) + 1;
-        });
+        acc[t.votingType] = (acc[t.votingType] ?? 0) + 1;
         return acc;
       },
       {} as Record<string, number>

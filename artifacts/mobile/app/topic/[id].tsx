@@ -46,9 +46,9 @@ export default function TopicDetailScreen() {
       ? (topic.totalRating / topic.ratingCount).toFixed(1)
       : null;
 
-  const hasYesNo = topic.votingTypes.includes("yesno");
-  const hasRating = topic.votingTypes.includes("rating");
-  const hasRanking = topic.votingTypes.includes("ranking");
+  const hasYesNo = topic.votingType === "yesno";
+  const hasRating = topic.votingType === "rating";
+  const hasRanking = topic.votingType === "ranking";
 
   const s = styles(colors, insets);
 

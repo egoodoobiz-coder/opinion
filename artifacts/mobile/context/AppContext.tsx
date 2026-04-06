@@ -34,7 +34,7 @@ export interface Topic {
   title: string;
   description: string;
   category: Category;
-  votingTypes: VotingType[];
+  votingType: VotingType;
   rankingOptions?: RankingOption[];
   createdAt: number;
   createdBy: string;
@@ -56,7 +56,7 @@ interface AppContextValue {
   topics: Topic[];
   userVotes: Record<string, UserVote>;
   userId: string;
-  addTopic: (topic: Omit<Topic, "id" | "createdAt" | "yesCount" | "noCount" | "totalRating" | "ratingCount" | "rankingVotes" | "createdBy">, premiumAccountType?: string) => void;
+  addTopic: (topic: Omit<Topic, "id" | "createdAt" | "yesCount" | "noCount" | "totalRating" | "ratingCount" | "rankingVotes" | "createdBy">, premiumAccountType?: string) => void; // votingType is single
   voteYesNo: (topicId: string, vote: "yes" | "no") => void;
   voteRating: (topicId: string, rating: number) => void;
   voteRanking: (topicId: string, orderedIds: string[]) => void;
@@ -65,7 +65,7 @@ interface AppContextValue {
 
 const AppContext = createContext<AppContextValue | null>(null);
 
-const TOPICS_KEY = "rankit_topics";
+const TOPICS_KEY = "opinion_topics_v2";
 const VOTES_KEY = "rankit_votes";
 const USER_KEY = "rankit_user";
 
@@ -75,7 +75,7 @@ const SAMPLE_TOPICS: Topic[] = [
     title: "Is pineapple on pizza acceptable?",
     description: "The age-old debate. Share your honest opinion.",
     category: "food",
-    votingTypes: ["yesno", "rating"],
+    votingType: "yesno",
     createdAt: Date.now() - 86400000 * 2,
     createdBy: "system",
     yesCount: 142,
@@ -89,7 +89,7 @@ const SAMPLE_TOPICS: Topic[] = [
     title: "Rank these streaming platforms",
     description: "Which do you actually use most?",
     category: "tech",
-    votingTypes: ["ranking", "rating"],
+    votingType: "ranking",
     rankingOptions: [
       { id: "netflix", label: "Netflix" },
       { id: "disney", label: "Disney+" },
@@ -116,7 +116,7 @@ const SAMPLE_TOPICS: Topic[] = [
     title: "Should remote work be the standard?",
     description: "Post-pandemic, is remote-first the right move for companies?",
     category: "lifestyle",
-    votingTypes: ["yesno", "rating"],
+    votingType: "yesno",
     createdAt: Date.now() - 3600000 * 5,
     createdBy: "system",
     yesCount: 876,
@@ -130,7 +130,7 @@ const SAMPLE_TOPICS: Topic[] = [
     title: "Best programming languages to learn in 2025",
     description: "For career, for fun, or both?",
     category: "tech",
-    votingTypes: ["ranking", "yesno"],
+    votingType: "ranking",
     rankingOptions: [
       { id: "python", label: "Python" },
       { id: "rust", label: "Rust" },
@@ -157,7 +157,7 @@ const SAMPLE_TOPICS: Topic[] = [
     title: "Is chess a sport?",
     description: "Should mental games be classified as sports?",
     category: "sports",
-    votingTypes: ["yesno"],
+    votingType: "yesno",
     createdAt: Date.now() - 3600000 * 2,
     createdBy: "system",
     yesCount: 521,

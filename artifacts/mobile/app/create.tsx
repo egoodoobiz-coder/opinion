@@ -29,21 +29,15 @@ export default function CreateScreen() {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState<Category>("other");
-  const [votingTypes, setVotingTypes] = useState<VotingType[]>(["yesno"]);
+  const [votingType, setVotingType] = useState<VotingType>("yesno");
   const [rankOptions, setRankOptions] = useState<string[]>(["", ""]);
   const inputRefs = useRef<Array<TextInput | null>>([]);
 
-  const needsRankOptions = votingTypes.includes("ranking");
+  const needsRankOptions = votingType === "ranking";
 
-  function toggleVotingType(vt: VotingType) {
+  function selectVotingType(vt: VotingType) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setVotingTypes((prev) =>
-      prev.includes(vt)
-        ? prev.length === 1
-          ? prev
-          : prev.filter((v) => v !== vt)
-        : [...prev, vt]
-    );
+    setVotingType(vt);
   }
 
   function updateRankOption(idx: number, text: string) {
@@ -88,7 +82,7 @@ export default function CreateScreen() {
         title: title.trim(),
         description: description.trim(),
         category,
-        votingTypes,
+        votingType,
         rankingOptions: needsRankOptions
           ? validRankOpts.map((label, i) => ({
               id: `opt_${i}_${Date.now()}`,
@@ -205,19 +199,19 @@ export default function CreateScreen() {
           </View>
         </View>
 
-        {/* Voting Types */}
+        {/* Voting Type */}
         <View style={s.field}>
-          <Text style={s.label}>Voting Types</Text>
-          <Text style={s.sublabel}>Choose how people can vote</Text>
+          <Text style={s.label}>Voting Type</Text>
+          <Text style={s.sublabel}>Choose one way for people to respond</Text>
           <View style={s.voteTypeRow}>
             {(
               [
-                { vt: "yesno" as VotingType, icon: "thumbs-up", label: "Yes / No" },
-                { vt: "rating" as VotingType, icon: "star", label: "Star Rating" },
-                { vt: "ranking" as VotingType, icon: "list", label: "Ranking" },
+                { vt: "yesno" as VotingType, icon: "thumbs-up", label: "Yes / No", desc: "Simple agree or disagree" },
+                { vt: "rating" as VotingType, icon: "star", label: "Star Rating", desc: "Score from 1 to 5 stars" },
+                { vt: "ranking" as VotingType, icon: "list", label: "Ranking", desc: "Order a list of options" },
               ] as const
-            ).map(({ vt, icon, label }) => {
-              const active = votingTypes.includes(vt);
+            ).map(({ vt, icon, label, desc }) => {
+              const active = votingType === vt;
               return (
                 <Pressable
                   key={vt}
@@ -228,24 +222,27 @@ export default function CreateScreen() {
                       borderColor: colors.primary,
                     },
                   ]}
-                  onPress={() => toggleVotingType(vt)}
+                  onPress={() => selectVotingType(vt)}
                 >
                   <Feather
                     name={icon as any}
                     size={20}
                     color={active ? colors.primary : colors.mutedForeground}
                   />
-                  <Text
-                    style={[
-                      s.voteTypeLabel,
-                      active && { color: colors.primary, fontWeight: "700" },
-                    ]}
-                  >
-                    {label}
-                  </Text>
-                  {active && (
-                    <Feather name="check" size={14} color={colors.primary} />
-                  )}
+                  <View style={{ flex: 1 }}>
+                    <Text
+                      style={[
+                        s.voteTypeLabel,
+                        active && { color: colors.primary, fontWeight: "700" },
+                      ]}
+                    >
+                      {label}
+                    </Text>
+                    <Text style={s.voteTypeDesc}>{desc}</Text>
+                  </View>
+                  <View style={[s.radio, active && s.radioActive]}>
+                    {active && <View style={s.radioDot} />}
+                  </View>
                 </Pressable>
               );
             })}
@@ -430,10 +427,32 @@ const styles = (colors: ReturnType<typeof useColors>, insets: any) =>
       backgroundColor: colors.card,
     },
     voteTypeLabel: {
-      flex: 1,
       fontSize: 15,
       fontWeight: "500",
       color: colors.foreground,
+    },
+    voteTypeDesc: {
+      fontSize: 12,
+      color: colors.mutedForeground,
+      marginTop: 1,
+    },
+    radio: {
+      width: 20,
+      height: 20,
+      borderRadius: 10,
+      borderWidth: 2,
+      borderColor: colors.border,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    radioActive: {
+      borderColor: colors.primary,
+    },
+    radioDot: {
+      width: 10,
+      height: 10,
+      borderRadius: 5,
+      backgroundColor: colors.primary,
     },
     rankOptions: { gap: 8 },
     rankOptionRow: {
