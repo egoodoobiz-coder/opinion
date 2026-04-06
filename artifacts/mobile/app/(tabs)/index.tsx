@@ -53,7 +53,7 @@ export default function FeedScreen() {
         ]}
       >
         <View style={s.headerTop}>
-          <Text style={s.logo}>RankIt</Text>
+          <Text style={s.logo}>Opinion</Text>
           <Pressable
             style={({ pressed }) => [s.createBtn, pressed && { opacity: 0.8 }]}
             onPress={() => router.push("/create")}
