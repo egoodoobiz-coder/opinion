@@ -10,9 +10,10 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from "react-native";
+import ThemedInput from "@/components/ThemedInput";
+import type { TextInput } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ALL_CATEGORIES, CATEGORY_CONFIG } from "@/constants/categories";
 import { useApp, type Category, type VotingType } from "@/context/AppContext";
@@ -132,7 +133,7 @@ export default function CreateScreen() {
         {/* Title */}
         <View style={s.field}>
           <Text style={s.label}>Topic Title *</Text>
-          <TextInput
+          <ThemedInput
             style={s.input}
             placeholder="What's your opinion on..."
             placeholderTextColor={colors.mutedForeground}
@@ -147,7 +148,7 @@ export default function CreateScreen() {
         {/* Description */}
         <View style={s.field}>
           <Text style={s.label}>Description</Text>
-          <TextInput
+          <ThemedInput
             style={[s.input, s.inputMulti]}
             placeholder="Add more context (optional)"
             placeholderTextColor={colors.mutedForeground}
@@ -260,7 +261,7 @@ export default function CreateScreen() {
                   <View style={s.rankBadge}>
                     <Text style={s.rankBadgeNum}>{idx + 1}</Text>
                   </View>
-                  <TextInput
+                  <ThemedInput
                     ref={(ref) => {
                       inputRefs.current[idx] = ref;
                     }}

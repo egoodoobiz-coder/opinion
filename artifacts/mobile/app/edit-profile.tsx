@@ -12,10 +12,10 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import ThemedInput from "@/components/ThemedInput";
 import { useColors } from "@/hooks/useColors";
 
 export default function EditProfileScreen() {
@@ -132,7 +132,7 @@ export default function EditProfileScreen() {
           <View style={s.card}>
             <View style={s.fieldRow}>
               <Text style={s.fieldLabel}>First name</Text>
-              <TextInput
+              <ThemedInput
                 style={s.fieldInput}
                 value={firstName}
                 onChangeText={setFirstName}
@@ -145,7 +145,7 @@ export default function EditProfileScreen() {
             <View style={s.divider} />
             <View style={s.fieldRow}>
               <Text style={s.fieldLabel}>Last name</Text>
-              <TextInput
+              <ThemedInput
                 style={s.fieldInput}
                 value={lastName}
                 onChangeText={setLastName}

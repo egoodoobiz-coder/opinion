@@ -11,10 +11,10 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import ThemedInput from "@/components/ThemedInput";
 import { useColors } from "@/hooks/useColors";
 
 WebBrowser.maybeCompleteAuthSession();
@@ -101,7 +101,7 @@ export default function SignUpScreen() {
         <Text style={s.subtitle}>
           We sent a verification code to {email}
         </Text>
-        <TextInput
+        <ThemedInput
           style={s.input}
           placeholder="6-digit code"
           placeholderTextColor={colors.mutedForeground}
@@ -170,7 +170,7 @@ export default function SignUpScreen() {
       </View>
 
       <Text style={s.label}>Email</Text>
-      <TextInput
+      <ThemedInput
         style={s.input}
         placeholder="you@company.com"
         placeholderTextColor={colors.mutedForeground}
@@ -185,7 +185,7 @@ export default function SignUpScreen() {
       )}
 
       <Text style={s.label}>Password</Text>
-      <TextInput
+      <ThemedInput
         style={s.input}
         placeholder="Create a strong password"
         placeholderTextColor={colors.mutedForeground}

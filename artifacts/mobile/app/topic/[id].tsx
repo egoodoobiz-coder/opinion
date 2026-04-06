@@ -10,9 +10,9 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from "react-native";
+import ThemedInput from "@/components/ThemedInput";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import RankingVote from "@/components/RankingVote";
 import StarRating from "@/components/StarRating";
@@ -344,7 +344,7 @@ export default function TopicDetailScreen() {
           { paddingBottom: Platform.OS === "ios" ? insets.bottom + 8 : 12 },
         ]}
       >
-        <TextInput
+        <ThemedInput
           style={s.commentInput}
           placeholder="Add a comment..."
           placeholderTextColor={colors.mutedForeground}

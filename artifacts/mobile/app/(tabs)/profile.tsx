@@ -14,10 +14,10 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import ThemedInput from "@/components/ThemedInput";
 import TopicCard from "@/components/TopicCard";
 import { useApp } from "@/context/AppContext";
 import { useColors } from "@/hooks/useColors";
@@ -448,7 +448,7 @@ export default function ProfileScreen() {
             <Text style={s.modalSubtitle}>
               Enter the admin secret code to claim master admin access.
             </Text>
-            <TextInput
+            <ThemedInput
               style={s.modalInput}
               value={adminCode}
               onChangeText={setAdminCode}

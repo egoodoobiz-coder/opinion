@@ -7,9 +7,9 @@ import {
   Pressable,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from "react-native";
+import ThemedInput from "@/components/ThemedInput";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import TopicCard from "@/components/TopicCard";
 import { ALL_CATEGORIES, CATEGORY_CONFIG } from "@/constants/categories";
@@ -53,8 +53,8 @@ export default function ExploreScreen() {
         <Text style={s.title}>Explore</Text>
         <View style={s.searchRow}>
           <Feather name="search" size={16} color={colors.mutedForeground} />
-          <TextInput
-            style={s.searchInput}
+          <ThemedInput
+            style={[s.searchInput]}
             placeholder="Search opinions..."
             placeholderTextColor={colors.mutedForeground}
             value={query}

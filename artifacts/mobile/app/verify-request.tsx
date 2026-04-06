@@ -12,10 +12,10 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import ThemedInput from "@/components/ThemedInput";
 import { useColors } from "@/hooks/useColors";
 
 type AccountType = "company" | "celebrity";
@@ -220,7 +220,7 @@ export default function VerifyRequestScreen() {
           <View style={s.section}>
             <Text style={s.sectionLabel}>Tell us about your account (optional)</Text>
             <View style={s.card}>
-              <TextInput
+              <ThemedInput
                 style={s.noteInput}
                 value={note}
                 onChangeText={setNote}
