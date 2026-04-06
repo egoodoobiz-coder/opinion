@@ -53,7 +53,7 @@ export default function ProfileScreen() {
         const headers = { Authorization: `Bearer ${token}` };
 
         // Check admin status
-        const adminRes = await fetch(`${API_URL}/admin/is-admin`, { headers });
+        const adminRes = await fetch(`${API_URL}/api/admin/is-admin`, { headers });
         if (adminRes.ok) {
           const adminData = await adminRes.json();
           setIsAdmin(adminData.isAdmin === true);
@@ -61,7 +61,7 @@ export default function ProfileScreen() {
 
         // Auto-activate premium if verification approved
         if (!isPremium) {
-          const verifyRes = await fetch(`${API_URL}/admin/verify-requests/me`, { headers });
+          const verifyRes = await fetch(`${API_URL}/api/admin/verify-requests/me`, { headers });
           if (verifyRes.ok) {
             const verifyData = await verifyRes.json();
             const approved = (verifyData.requests ?? []).find((r: any) => r.status === "approved");
@@ -86,7 +86,7 @@ export default function ProfileScreen() {
     setClaimingAdmin(true);
     try {
       const token = await getToken();
-      const res = await fetch(`${API_URL}/admin/claim`, {
+      const res = await fetch(`${API_URL}/api/admin/claim`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({

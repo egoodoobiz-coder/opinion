@@ -46,7 +46,7 @@ export default function AdminScreen() {
   const fetchRequests = useCallback(async () => {
     try {
       const token = await getToken();
-      const res = await fetch(`${API_URL}/admin/verify-requests`, {
+      const res = await fetch(`${API_URL}/api/admin/verify-requests`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) {
@@ -76,7 +76,7 @@ export default function AdminScreen() {
     setProcessing(id);
     try {
       const token = await getToken();
-      const res = await fetch(`${API_URL}/admin/verify-requests/${id}`, {
+      const res = await fetch(`${API_URL}/api/admin/verify-requests/${id}`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",

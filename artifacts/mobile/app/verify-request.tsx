@@ -42,7 +42,7 @@ export default function VerifyRequestScreen() {
   async function fetchMyRequest() {
     try {
       const token = await getToken();
-      const res = await fetch(`${API_URL}/admin/verify-requests/me`, {
+      const res = await fetch(`${API_URL}/api/admin/verify-requests/me`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
@@ -63,7 +63,7 @@ export default function VerifyRequestScreen() {
     setSubmitting(true);
     try {
       const token = await getToken();
-      const res = await fetch(`${API_URL}/admin/verify-requests`, {
+      const res = await fetch(`${API_URL}/api/admin/verify-requests`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
