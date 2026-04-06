@@ -6,7 +6,6 @@ import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  FlatList,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -18,7 +17,6 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import ThemedInput from "@/components/ThemedInput";
-import TopicCard from "@/components/TopicCard";
 import { useApp } from "@/context/AppContext";
 import { useColors } from "@/hooks/useColors";
 import type { VotingType } from "@/context/AppContext";
@@ -384,33 +382,6 @@ export default function ProfileScreen() {
                 ))}
               </View>
             </View>
-          </View>
-        )}
-
-        {/* Topics */}
-        {myTopics.length > 0 && (
-          <View style={s.section}>
-            <Text style={s.sectionTitle}>My Topics</Text>
-            {myTopics.map((t) => (
-              <TopicCard key={t.id} topic={t} userVoted={!!userVotes[t.id]} />
-            ))}
-          </View>
-        )}
-
-        {votedTopics.length > 0 && (
-          <View style={s.section}>
-            <Text style={s.sectionTitle}>Voted On</Text>
-            {votedTopics.map((t) => (
-              <TopicCard key={t.id} topic={t} userVoted />
-            ))}
-          </View>
-        )}
-
-        {myTopics.length === 0 && votedTopics.length === 0 && (
-          <View style={s.empty}>
-            <Feather name="inbox" size={48} color={colors.border} />
-            <Text style={s.emptyText}>Nothing here yet</Text>
-            <Text style={s.emptySubtext}>Create a topic or vote on something</Text>
           </View>
         )}
 
