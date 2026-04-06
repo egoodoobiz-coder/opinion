@@ -7,6 +7,7 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
+  KeyboardAvoidingView,
   Platform,
   Pressable,
   ScrollView,
@@ -427,7 +428,10 @@ export default function ProfileScreen() {
 
       {/* Admin claim modal */}
       {showAdminModal && (
-        <View style={s.modalOverlay}>
+        <KeyboardAvoidingView
+          style={s.modalOverlay}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+        >
           <Pressable style={s.modalBackdrop} onPress={() => { setShowAdminModal(false); setAdminCode(""); }} />
           <View style={s.modalCard}>
             <View style={s.modalHeader}>
@@ -470,7 +474,7 @@ export default function ProfileScreen() {
               </Pressable>
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       )}
     </View>
   );
