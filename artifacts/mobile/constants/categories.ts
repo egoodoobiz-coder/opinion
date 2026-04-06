@@ -13,6 +13,8 @@ export const CATEGORY_CONFIG: Record<
   gaming: { label: "Gaming", icon: "zap", color: "#eab308" },
   science: { label: "Science", icon: "globe", color: "#06b6d4" },
   lifestyle: { label: "Lifestyle", icon: "sun", color: "#f59e0b" },
+  travel: { label: "Travel", icon: "map", color: "#14b8a6" },
+  automobiles: { label: "Autos", icon: "truck", color: "#f43f5e" },
   other: { label: "Other", icon: "more-horizontal", color: "#94a3b8" },
 };
 
@@ -26,5 +28,7 @@ export const ALL_CATEGORIES: Category[] = [
   "gaming",
   "science",
   "lifestyle",
+  "travel",
+  "automobiles",
   "other",
 ];

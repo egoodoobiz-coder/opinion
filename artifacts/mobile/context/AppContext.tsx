@@ -19,6 +19,8 @@ export type Category =
   | "gaming"
   | "science"
   | "lifestyle"
+  | "travel"
+  | "automobiles"
   | "other";
 
 export interface RankingOption {
