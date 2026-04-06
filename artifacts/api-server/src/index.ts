@@ -7,9 +7,8 @@ async function initStripe() {
   const databaseUrl = process.env.DATABASE_URL;
 
   if (!databaseUrl) {
-    throw new Error(
-      "DATABASE_URL environment variable is required for Stripe integration."
-    );
+    logger.warn("DATABASE_URL not set — skipping Stripe initialization");
+    return;
   }
 
   try {
@@ -31,9 +30,13 @@ async function initStripe() {
       .syncBackfill()
       .then(() => logger.info("Stripe data synced"))
       .catch((err: unknown) => logger.error({ err }, "Error syncing Stripe data"));
-  } catch (error) {
-    logger.error({ err: error }, "Failed to initialize Stripe");
-    throw error;
+  } catch (error: any) {
+    if (error?.message?.includes("not yet connected")) {
+      logger.warn("Stripe integration not connected yet — skipping Stripe initialization. Connect Stripe via the Integrations panel.");
+    } else {
+      logger.error({ err: error }, "Failed to initialize Stripe");
+      throw error;
+    }
   }
 }
 

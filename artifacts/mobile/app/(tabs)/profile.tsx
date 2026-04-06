@@ -28,7 +28,6 @@ export default function ProfileScreen() {
   const { user } = useUser();
   const router = useRouter();
   const { topics, userVotes, userId } = useApp();
-  const [upgrading, setUpgrading] = useState(false);
   const [activeTab, setActiveTab] = useState<"topics" | "analytics">("topics");
 
   const isPremium = (user?.unsafeMetadata as any)?.isPremium === true;
@@ -93,19 +92,6 @@ export default function ProfileScreen() {
 
     return { byCategory, topTopic, voteTypeBreakdown, avgEngagement };
   }, [myTopics, isPremium]);
-
-  async function handleUpgrade(type: AccountType) {
-    if (!user) return;
-    setUpgrading(true);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    try {
-      await user.update({
-        unsafeMetadata: { isPremium: true, accountType: type },
-      });
-    } finally {
-      setUpgrading(false);
-    }
-  }
 
   const s = styles(colors, insets);
 
@@ -235,46 +221,16 @@ export default function ProfileScreen() {
             <Text style={s.premiumSubtitle}>
               Get a verified badge, promote your topics, and unlock detailed analytics
             </Text>
-            <View style={s.upgradeButtons}>
-              <Pressable
-                style={({ pressed }) => [
-                  s.upgradeBtn,
-                  s.upgradeBtnCompany,
-                  pressed && { opacity: 0.8 },
-                  upgrading && { opacity: 0.5 },
-                ]}
-                onPress={() => handleUpgrade("company")}
-                disabled={upgrading}
-              >
-                {upgrading ? (
-                  <ActivityIndicator color="#fff" size="small" />
-                ) : (
-                  <>
-                    <Feather name="briefcase" size={15} color="#fff" />
-                    <Text style={s.upgradeBtnText}>Company</Text>
-                  </>
-                )}
-              </Pressable>
-              <Pressable
-                style={({ pressed }) => [
-                  s.upgradeBtn,
-                  s.upgradeBtnCelebrity,
-                  pressed && { opacity: 0.8 },
-                  upgrading && { opacity: 0.5 },
-                ]}
-                onPress={() => handleUpgrade("celebrity")}
-                disabled={upgrading}
-              >
-                {upgrading ? (
-                  <ActivityIndicator color="#fff" size="small" />
-                ) : (
-                  <>
-                    <Feather name="zap" size={15} color="#fff" />
-                    <Text style={s.upgradeBtnText}>Celebrity</Text>
-                  </>
-                )}
-              </Pressable>
-            </View>
+            <Pressable
+              style={({ pressed }) => [s.upgradeBtn, s.upgradeBtnPrimary, pressed && { opacity: 0.8 }]}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                router.push("/upgrade");
+              }}
+            >
+              <Feather name="star" size={15} color="#fff" />
+              <Text style={s.upgradeBtnText}>View Plans & Pricing</Text>
+            </Pressable>
           </View>
         )}
 
@@ -468,18 +424,15 @@ const styles = (colors: ReturnType<typeof useColors>, insets: any) =>
     premiumHeader: { flexDirection: "row", alignItems: "center", gap: 8 },
     premiumTitle: { fontSize: 16, fontWeight: "800", color: colors.star },
     premiumSubtitle: { fontSize: 13, color: colors.mutedForeground, lineHeight: 18 },
-    upgradeButtons: { flexDirection: "row", gap: 10 },
     upgradeBtn: {
-      flex: 1,
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "center",
       gap: 6,
-      paddingVertical: 12,
+      paddingVertical: 13,
       borderRadius: 12,
     },
-    upgradeBtnCompany: { backgroundColor: colors.primary },
-    upgradeBtnCelebrity: { backgroundColor: colors.star },
+    upgradeBtnPrimary: { backgroundColor: colors.primary },
     upgradeBtnText: { fontSize: 14, fontWeight: "700", color: "#fff" },
     analyticsCard: {
       margin: 16,
