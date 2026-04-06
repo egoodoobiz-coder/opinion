@@ -39,6 +39,14 @@ export default function FeedScreen() {
           b.yesCount + b.noCount + b.ratingCount - (a.yesCount + a.noCount + a.ratingCount)
       );
     }
+    // Promote premium topics to the top
+    list.sort((a, b) => {
+      const aPremium = !!(a as any).premiumAccountType;
+      const bPremium = !!(b as any).premiumAccountType;
+      if (aPremium && !bPremium) return -1;
+      if (!aPremium && bPremium) return 1;
+      return 0;
+    });
     return list;
   }, [topics, activeFilter, activeCategory]);
 

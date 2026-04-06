@@ -1,6 +1,7 @@
+import { useAuth, useUser } from "@clerk/expo";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import { useRouter } from "expo-router";
+import { type Href, useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
   Alert,
@@ -22,6 +23,8 @@ export default function CreateScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { addTopic } = useApp();
+  const { isSignedIn } = useAuth();
+  const { user } = useUser();
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -56,6 +59,10 @@ export default function CreateScreen() {
   }
 
   function submit() {
+    if (!isSignedIn) {
+      router.replace("/(auth)/sign-in" as Href);
+      return;
+    }
     if (!title.trim()) {
       Alert.alert("Missing title", "Please enter a topic title.");
       return;
@@ -64,20 +71,25 @@ export default function CreateScreen() {
       Alert.alert("Ranking options", "Add at least 2 options for ranking.");
       return;
     }
-    addTopic({
-      title: title.trim(),
-      description: description.trim(),
-      category,
-      votingTypes,
-      rankingOptions: needsRankOptions
-        ? rankOptions
-            .filter((o) => o.trim())
-            .map((label, i) => ({
-              id: `opt_${i}_${Date.now()}`,
-              label: label.trim(),
-            }))
-        : undefined,
-    });
+    const isPremium = (user?.unsafeMetadata as any)?.isPremium === true;
+    const accountType = isPremium ? (user?.unsafeMetadata as any)?.accountType : undefined;
+    addTopic(
+      {
+        title: title.trim(),
+        description: description.trim(),
+        category,
+        votingTypes,
+        rankingOptions: needsRankOptions
+          ? rankOptions
+              .filter((o) => o.trim())
+              .map((label, i) => ({
+                id: `opt_${i}_${Date.now()}`,
+                label: label.trim(),
+              }))
+          : undefined,
+      },
+      accountType
+    );
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     router.back();
   }

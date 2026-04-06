@@ -1,3 +1,4 @@
+import { useUser } from "@clerk/expo";
 import { Feather } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React from "react";
@@ -30,6 +31,7 @@ function avgRank(topic: Topic, optionId: string) {
 export default function TopicCard({ topic, userVoted }: Props) {
   const colors = useColors();
   const router = useRouter();
+  const { user } = useUser();
   const cat = CATEGORY_CONFIG[topic.category];
   const total = topic.yesCount + topic.noCount;
   const yesPercent = total > 0 ? Math.round((topic.yesCount / total) * 100) : null;
@@ -39,6 +41,10 @@ export default function TopicCard({ topic, userVoted }: Props) {
   const hasYesNo = topic.votingTypes.includes("yesno");
   const hasRating = topic.votingTypes.includes("rating");
   const hasRanking = topic.votingTypes.includes("ranking");
+
+  // Check if topic creator is premium (stored in topic.premiumAccountType)
+  const isPremiumTopic = !!(topic as any).premiumAccountType;
+  const premiumType: string = (topic as any).premiumAccountType ?? "";
 
   const topRanked =
     hasRanking && topic.rankingOptions
@@ -52,13 +58,23 @@ export default function TopicCard({ topic, userVoted }: Props) {
 
   return (
     <Pressable
-      style={({ pressed }) => [s.card, pressed && { opacity: 0.85 }]}
+      style={({ pressed }) => [s.card, isPremiumTopic && s.cardPremium, pressed && { opacity: 0.85 }]}
       onPress={() => router.push(`/topic/${topic.id}`)}
     >
       <View style={s.header}>
-        <View style={[s.catBadge, { backgroundColor: cat.color + "22" }]}>
-          <Feather name={cat.icon as any} size={12} color={cat.color} />
-          <Text style={[s.catLabel, { color: cat.color }]}>{cat.label}</Text>
+        <View style={s.headerLeft}>
+          <View style={[s.catBadge, { backgroundColor: cat.color + "22" }]}>
+            <Feather name={cat.icon as any} size={12} color={cat.color} />
+            <Text style={[s.catLabel, { color: cat.color }]}>{cat.label}</Text>
+          </View>
+          {isPremiumTopic && (
+            <View style={[s.verifiedBadge, premiumType === "celebrity" ? s.verifiedCelebrity : s.verifiedCompany]}>
+              <Feather name="check-circle" size={10} color="#fff" />
+              <Text style={s.verifiedText}>
+                {premiumType === "celebrity" ? "Celebrity" : "Company"}
+              </Text>
+            </View>
+          )}
         </View>
         <View style={s.headerRight}>
           {userVoted && (
@@ -156,12 +172,16 @@ const styles = (colors: ReturnType<typeof useColors>) =>
       borderWidth: 1,
       borderColor: colors.border,
     },
+    cardPremium: {
+      borderColor: colors.primary + "55",
+    },
     header: {
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "space-between",
       marginBottom: 10,
     },
+    headerLeft: { flexDirection: "row", alignItems: "center", gap: 6, flex: 1 },
     catBadge: {
       flexDirection: "row",
       alignItems: "center",
@@ -170,15 +190,19 @@ const styles = (colors: ReturnType<typeof useColors>) =>
       paddingVertical: 4,
       borderRadius: 100,
     },
-    catLabel: {
-      fontSize: 11,
-      fontWeight: "600",
-    },
-    headerRight: {
+    catLabel: { fontSize: 11, fontWeight: "600" },
+    verifiedBadge: {
       flexDirection: "row",
       alignItems: "center",
-      gap: 8,
+      gap: 3,
+      paddingHorizontal: 7,
+      paddingVertical: 3,
+      borderRadius: 100,
     },
+    verifiedCompany: { backgroundColor: colors.primary },
+    verifiedCelebrity: { backgroundColor: colors.star },
+    verifiedText: { fontSize: 10, fontWeight: "700", color: "#fff" },
+    headerRight: { flexDirection: "row", alignItems: "center", gap: 8 },
     votedBadge: {
       flexDirection: "row",
       alignItems: "center",
@@ -188,15 +212,8 @@ const styles = (colors: ReturnType<typeof useColors>) =>
       backgroundColor: colors.primary + "22",
       borderRadius: 100,
     },
-    votedLabel: {
-      fontSize: 10,
-      color: colors.primary,
-      fontWeight: "600",
-    },
-    time: {
-      fontSize: 11,
-      color: colors.mutedForeground,
-    },
+    votedLabel: { fontSize: 10, color: colors.primary, fontWeight: "600" },
+    time: { fontSize: 11, color: colors.mutedForeground },
     title: {
       fontSize: 16,
       fontWeight: "700",
@@ -204,70 +221,25 @@ const styles = (colors: ReturnType<typeof useColors>) =>
       lineHeight: 22,
       marginBottom: 4,
     },
-    desc: {
-      fontSize: 13,
-      color: colors.mutedForeground,
-      marginBottom: 10,
-    },
-    stats: {
-      gap: 8,
-      marginBottom: 10,
-    },
-    stat: {
-      gap: 4,
-    },
+    desc: { fontSize: 13, color: colors.mutedForeground, marginBottom: 10 },
+    stats: { gap: 8, marginBottom: 10 },
+    stat: { gap: 4 },
     yesnoBar: {
       height: 6,
       borderRadius: 3,
       backgroundColor: colors.no + "44",
       overflow: "hidden",
     },
-    yesBarFill: {
-      height: "100%",
-      borderRadius: 3,
-    },
-    statLabel: {
-      fontSize: 12,
-      color: colors.mutedForeground,
-    },
-    ratingRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 4,
-    },
-    ratingText: {
-      fontSize: 14,
-      fontWeight: "700",
-      color: colors.star,
-    },
-    ratingCount: {
-      fontSize: 12,
-      color: colors.mutedForeground,
-    },
-    rankPreview: {
-      gap: 2,
-    },
-    rankItem: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 6,
-    },
-    rankNum: {
-      fontSize: 11,
-      fontWeight: "700",
-      color: colors.primary,
-      width: 22,
-    },
-    rankLabel: {
-      fontSize: 12,
-      color: colors.foreground,
-      flex: 1,
-    },
-    voteTypePills: {
-      flexDirection: "row",
-      gap: 6,
-      flexWrap: "wrap",
-    },
+    yesBarFill: { height: "100%", borderRadius: 3 },
+    statLabel: { fontSize: 12, color: colors.mutedForeground },
+    ratingRow: { flexDirection: "row", alignItems: "center", gap: 4 },
+    ratingText: { fontSize: 14, fontWeight: "700", color: colors.star },
+    ratingCount: { fontSize: 12, color: colors.mutedForeground },
+    rankPreview: { gap: 2 },
+    rankItem: { flexDirection: "row", alignItems: "center", gap: 6 },
+    rankNum: { fontSize: 11, fontWeight: "700", color: colors.primary, width: 22 },
+    rankLabel: { fontSize: 12, color: colors.foreground, flex: 1 },
+    voteTypePills: { flexDirection: "row", gap: 6, flexWrap: "wrap" },
     pill: {
       flexDirection: "row",
       alignItems: "center",
@@ -276,8 +248,5 @@ const styles = (colors: ReturnType<typeof useColors>) =>
       paddingVertical: 3,
       borderRadius: 100,
     },
-    pillLabel: {
-      fontSize: 10,
-      color: colors.mutedForeground,
-    },
+    pillLabel: { fontSize: 10, color: colors.mutedForeground },
   });

@@ -1,4 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useUser } from "@clerk/expo";
 import React, {
   createContext,
   useCallback,
@@ -55,7 +56,7 @@ interface AppContextValue {
   topics: Topic[];
   userVotes: Record<string, UserVote>;
   userId: string;
-  addTopic: (topic: Omit<Topic, "id" | "createdAt" | "yesCount" | "noCount" | "totalRating" | "ratingCount" | "rankingVotes" | "createdBy">) => void;
+  addTopic: (topic: Omit<Topic, "id" | "createdAt" | "yesCount" | "noCount" | "totalRating" | "ratingCount" | "rankingVotes" | "createdBy">, premiumAccountType?: string) => void;
   voteYesNo: (topicId: string, vote: "yes" | "no") => void;
   voteRating: (topicId: string, rating: number) => void;
   voteRanking: (topicId: string, orderedIds: string[]) => void;
@@ -176,6 +177,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [userVotes, setUserVotes] = useState<Record<string, UserVote>>({});
   const [userId, setUserId] = useState<string>("");
   const [loaded, setLoaded] = useState(false);
+  const { user } = useUser();
+  const clerkUserId = user?.id;
 
   useEffect(() => {
     (async () => {
@@ -222,22 +225,26 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const addTopic = useCallback(
-    (topic: Omit<Topic, "id" | "createdAt" | "yesCount" | "noCount" | "totalRating" | "ratingCount" | "rankingVotes" | "createdBy">) => {
-      const newTopic: Topic = {
+    (topic: Omit<Topic, "id" | "createdAt" | "yesCount" | "noCount" | "totalRating" | "ratingCount" | "rankingVotes" | "createdBy">, premiumAccountType?: string) => {
+      const effectiveUserId = clerkUserId ?? userId;
+      const newTopic: any = {
         ...topic,
         id: generateId(),
         createdAt: Date.now(),
-        createdBy: userId,
+        createdBy: effectiveUserId,
         yesCount: 0,
         noCount: 0,
         totalRating: 0,
         ratingCount: 0,
         rankingVotes: {},
       };
+      if (premiumAccountType) {
+        newTopic.premiumAccountType = premiumAccountType;
+      }
       const updated = [newTopic, ...topics];
       saveTopics(updated);
     },
-    [topics, userId, saveTopics]
+    [topics, userId, clerkUserId, saveTopics]
   );
 
   const voteYesNo = useCallback(
