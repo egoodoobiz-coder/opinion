@@ -8,6 +8,7 @@ import {
   Alert,
   FlatList,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -427,18 +428,28 @@ export default function ProfileScreen() {
       </ScrollView>
 
       {/* Admin claim modal */}
-      {showAdminModal && (
+      <Modal
+        visible={showAdminModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => { setShowAdminModal(false); setAdminCode(""); }}
+      >
         <KeyboardAvoidingView
           style={s.modalOverlay}
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          behavior={Platform.OS === "ios" ? "padding" : "padding"}
         >
-          <Pressable style={s.modalBackdrop} onPress={() => { setShowAdminModal(false); setAdminCode(""); }} />
+          <Pressable
+            style={s.modalBackdrop}
+            onPress={() => { setShowAdminModal(false); setAdminCode(""); }}
+          />
           <View style={s.modalCard}>
             <View style={s.modalHeader}>
               <Feather name="shield" size={20} color={colors.primary} />
               <Text style={s.modalTitle}>Admin Access</Text>
             </View>
-            <Text style={s.modalSubtitle}>Enter the admin secret code to claim master admin access.</Text>
+            <Text style={s.modalSubtitle}>
+              Enter the admin secret code to claim master admin access.
+            </Text>
             <TextInput
               style={s.modalInput}
               value={adminCode}
@@ -475,7 +486,7 @@ export default function ProfileScreen() {
             </View>
           </View>
         </KeyboardAvoidingView>
-      )}
+      </Modal>
     </View>
   );
 }
@@ -749,24 +760,23 @@ const styles = (colors: ReturnType<typeof useColors>, insets: any) =>
     },
     // Modal styles
     modalOverlay: {
-      position: "absolute",
-      top: 0, left: 0, right: 0, bottom: 0,
-      justifyContent: "flex-end",
-      zIndex: 100,
+      flex: 1,
+      justifyContent: "center",
+      alignItems: "center",
+      paddingHorizontal: 24,
     },
     modalBackdrop: {
       position: "absolute",
       top: 0, left: 0, right: 0, bottom: 0,
-      backgroundColor: "rgba(0,0,0,0.7)",
+      backgroundColor: "rgba(0,0,0,0.75)",
     },
     modalCard: {
+      width: "100%",
       backgroundColor: colors.card,
-      borderTopLeftRadius: 24,
-      borderTopRightRadius: 24,
+      borderRadius: 20,
       padding: 24,
-      paddingBottom: insets.bottom + 24,
-      gap: 14,
-      borderTopWidth: 1,
+      gap: 16,
+      borderWidth: 1,
       borderColor: colors.border,
     },
     modalHeader: { flexDirection: "row", alignItems: "center", gap: 10 },
