@@ -1,13 +1,16 @@
+import { useUser } from "@clerk/expo";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import {
+  KeyboardAvoidingView,
   Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -22,12 +25,30 @@ export default function TopicDetailScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { topics, getUserVote, voteYesNo, voteRating, voteRanking } = useApp();
+  const { topics, getUserVote, voteYesNo, voteRating, voteRanking, addComment, userId } = useApp();
+  const { user } = useUser();
 
   const topic = useMemo(() => topics.find((t) => t.id === id), [topics, id]);
   const userVote = getUserVote(id ?? "");
 
   const [pendingRanking, setPendingRanking] = useState<string[] | null>(null);
+  const [commentText, setCommentText] = useState("");
+  const [submittingComment, setSubmittingComment] = useState(false);
+  const scrollRef = useRef<ScrollView>(null);
+
+  function submitComment() {
+    if (!commentText.trim() || !topic) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setSubmittingComment(true);
+    const authorId = user?.id ?? userId;
+    const authorName = user
+      ? [user.firstName, user.lastName].filter(Boolean).join(" ") || user.primaryEmailAddress?.emailAddress?.split("@")[0] || "Anonymous"
+      : "Anonymous";
+    addComment(topic.id, commentText.trim(), authorId, authorName);
+    setCommentText("");
+    setSubmittingComment(false);
+    setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
+  }
 
   if (!topic) {
     return (
@@ -53,7 +74,11 @@ export default function TopicDetailScreen() {
   const s = styles(colors, insets);
 
   return (
-    <View style={s.container}>
+    <KeyboardAvoidingView
+      style={s.container}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      keyboardVerticalOffset={0}
+    >
       <View
         style={[
           s.header,
@@ -73,11 +98,13 @@ export default function TopicDetailScreen() {
       </View>
 
       <ScrollView
+        ref={scrollRef}
         contentContainerStyle={[
           s.content,
-          { paddingBottom: Platform.OS === "web" ? 60 : insets.bottom + 60 },
+          { paddingBottom: 16 },
         ]}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
         <Text style={s.title}>{topic.title}</Text>
         {!!topic.description && (
@@ -278,8 +305,68 @@ export default function TopicDetailScreen() {
             </View>
           </View>
         )}
+        {/* Comments Section */}
+        <View style={s.commentsSection}>
+          <View style={s.commentsSectionHeader}>
+            <Feather name="message-circle" size={15} color={colors.mutedForeground} />
+            <Text style={s.commentsSectionTitle}>
+              {topic.comments.length === 0
+                ? "No comments yet"
+                : `${topic.comments.length} Comment${topic.comments.length === 1 ? "" : "s"}`}
+            </Text>
+          </View>
+          {topic.comments.length === 0 && (
+            <Text style={s.noCommentsText}>Be the first to share your thoughts.</Text>
+          )}
+          {topic.comments.map((c) => (
+            <View key={c.id} style={s.commentItem}>
+              <View style={s.commentAvatar}>
+                <Text style={s.commentAvatarText}>
+                  {c.authorName.charAt(0).toUpperCase()}
+                </Text>
+              </View>
+              <View style={s.commentBody}>
+                <View style={s.commentMeta}>
+                  <Text style={s.commentAuthor}>{c.authorName}</Text>
+                  <Text style={s.commentTime}>{formatTime(c.createdAt)}</Text>
+                </View>
+                <Text style={s.commentText}>{c.text}</Text>
+              </View>
+            </View>
+          ))}
+        </View>
       </ScrollView>
-    </View>
+
+      {/* Comment Input Bar */}
+      <View
+        style={[
+          s.inputBar,
+          { paddingBottom: Platform.OS === "ios" ? insets.bottom + 8 : 12 },
+        ]}
+      >
+        <TextInput
+          style={s.commentInput}
+          placeholder="Add a comment..."
+          placeholderTextColor={colors.mutedForeground}
+          value={commentText}
+          onChangeText={setCommentText}
+          multiline
+          maxLength={500}
+          returnKeyType="send"
+          onSubmitEditing={submitComment}
+        />
+        <Pressable
+          onPress={submitComment}
+          disabled={!commentText.trim() || submittingComment}
+          style={({ pressed }) => [
+            s.sendBtn,
+            { opacity: !commentText.trim() ? 0.4 : pressed ? 0.7 : 1 },
+          ]}
+        >
+          <Feather name="send" size={18} color={colors.primaryForeground} />
+        </Pressable>
+      </View>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -455,4 +542,108 @@ const styles = (colors: ReturnType<typeof useColors>, insets: any) =>
       fontWeight: "700",
       color: colors.primaryForeground,
     },
+    commentsSection: {
+      gap: 12,
+      paddingTop: 4,
+    },
+    commentsSectionHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      paddingBottom: 4,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
+    commentsSectionTitle: {
+      fontSize: 14,
+      fontWeight: "700",
+      color: colors.foreground,
+    },
+    noCommentsText: {
+      fontSize: 13,
+      color: colors.mutedForeground,
+      textAlign: "center",
+      paddingVertical: 12,
+    },
+    commentItem: {
+      flexDirection: "row",
+      gap: 10,
+      alignItems: "flex-start",
+    },
+    commentAvatar: {
+      width: 34,
+      height: 34,
+      borderRadius: 17,
+      backgroundColor: colors.primary + "33",
+      alignItems: "center",
+      justifyContent: "center",
+      flexShrink: 0,
+    },
+    commentAvatarText: {
+      fontSize: 14,
+      fontWeight: "700",
+      color: colors.primary,
+    },
+    commentBody: {
+      flex: 1,
+      gap: 3,
+    },
+    commentMeta: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+    },
+    commentAuthor: {
+      fontSize: 13,
+      fontWeight: "700",
+      color: colors.foreground,
+    },
+    commentTime: {
+      fontSize: 11,
+      color: colors.mutedForeground,
+    },
+    commentText: {
+      fontSize: 14,
+      color: colors.foreground,
+      lineHeight: 20,
+    },
+    inputBar: {
+      flexDirection: "row",
+      alignItems: "flex-end",
+      gap: 10,
+      paddingHorizontal: 16,
+      paddingTop: 10,
+      borderTopWidth: 1,
+      borderTopColor: colors.border,
+      backgroundColor: colors.background,
+    },
+    commentInput: {
+      flex: 1,
+      backgroundColor: colors.muted,
+      borderRadius: 20,
+      paddingHorizontal: 14,
+      paddingVertical: 10,
+      fontSize: 14,
+      color: colors.foreground,
+      borderWidth: 1,
+      borderColor: colors.border,
+      maxHeight: 100,
+    },
+    sendBtn: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      backgroundColor: colors.primary,
+      alignItems: "center",
+      justifyContent: "center",
+      flexShrink: 0,
+    },
   });
+
+function formatTime(ts: number) {
+  const diff = Date.now() - ts;
+  if (diff < 60000) return "just now";
+  if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
+  if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
+  return `${Math.floor(diff / 86400000)}d ago`;
+}

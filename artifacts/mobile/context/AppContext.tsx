@@ -10,6 +10,15 @@ import React, {
 
 export type VotingType = "yesno" | "rating" | "ranking";
 
+export interface Comment {
+  id: string;
+  topicId: string;
+  text: string;
+  authorId: string;
+  authorName: string;
+  createdAt: number;
+}
+
 export type Category =
   | "food"
   | "tech"
@@ -42,7 +51,8 @@ export interface Topic {
   noCount: number;
   totalRating: number;
   ratingCount: number;
-  rankingVotes: Record<string, number[]>; // optionId -> list of ranks submitted
+  rankingVotes: Record<string, number[]>;
+  comments: Comment[];
 }
 
 export interface UserVote {
@@ -56,7 +66,8 @@ interface AppContextValue {
   topics: Topic[];
   userVotes: Record<string, UserVote>;
   userId: string;
-  addTopic: (topic: Omit<Topic, "id" | "createdAt" | "yesCount" | "noCount" | "totalRating" | "ratingCount" | "rankingVotes" | "createdBy">, premiumAccountType?: string) => void; // votingType is single
+  addTopic: (topic: Omit<Topic, "id" | "createdAt" | "yesCount" | "noCount" | "totalRating" | "ratingCount" | "rankingVotes" | "createdBy" | "comments">, premiumAccountType?: string) => void;
+  addComment: (topicId: string, text: string, authorId: string, authorName: string) => void;
   voteYesNo: (topicId: string, vote: "yes" | "no") => void;
   voteRating: (topicId: string, rating: number) => void;
   voteRanking: (topicId: string, orderedIds: string[]) => void;
@@ -83,6 +94,7 @@ const SAMPLE_TOPICS: Topic[] = [
     totalRating: 687,
     ratingCount: 189,
     rankingVotes: {},
+    comments: [],
   },
   {
     id: "2",
@@ -110,6 +122,7 @@ const SAMPLE_TOPICS: Topic[] = [
       apple: [4, 4, 5, 4, 4, 4, 4, 4],
       prime: [5, 5, 4, 5, 5, 5, 5, 5],
     },
+    comments: [],
   },
   {
     id: "3",
@@ -124,6 +137,7 @@ const SAMPLE_TOPICS: Topic[] = [
     totalRating: 2890,
     ratingCount: 576,
     rankingVotes: {},
+    comments: [],
   },
   {
     id: "4",
@@ -151,6 +165,7 @@ const SAMPLE_TOPICS: Topic[] = [
       go: [4, 4, 4, 3, 4, 4, 4],
       swift: [5, 5, 5, 5, 5, 5, 5],
     },
+    comments: [],
   },
   {
     id: "5",
@@ -165,6 +180,7 @@ const SAMPLE_TOPICS: Topic[] = [
     totalRating: 0,
     ratingCount: 0,
     rankingVotes: {},
+    comments: [],
   },
 ];
 
@@ -197,7 +213,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         setUserId(uid);
 
         if (topicsRaw) {
-          setTopics(JSON.parse(topicsRaw));
+          const parsed = JSON.parse(topicsRaw);
+          const migrated = parsed.map((t: any) => ({
+            ...t,
+            comments: t.comments ?? [],
+          }));
+          setTopics(migrated);
         } else {
           setTopics(SAMPLE_TOPICS);
           await AsyncStorage.setItem(TOPICS_KEY, JSON.stringify(SAMPLE_TOPICS));
@@ -237,6 +258,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         totalRating: 0,
         ratingCount: 0,
         rankingVotes: {},
+        comments: [],
       };
       if (premiumAccountType) {
         newTopic.premiumAccountType = premiumAccountType;
@@ -344,6 +366,24 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     [userVotes]
   );
 
+  const addComment = useCallback(
+    (topicId: string, text: string, authorId: string, authorName: string) => {
+      const comment: Comment = {
+        id: generateId(),
+        topicId,
+        text: text.trim(),
+        authorId,
+        authorName,
+        createdAt: Date.now(),
+      };
+      const updated = topics.map((t) =>
+        t.id === topicId ? { ...t, comments: [...t.comments, comment] } : t
+      );
+      saveTopics(updated);
+    },
+    [topics, saveTopics]
+  );
+
   if (!loaded) return null;
 
   return (
@@ -353,6 +393,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         userVotes,
         userId,
         addTopic,
+        addComment,
         voteYesNo,
         voteRating,
         voteRanking,

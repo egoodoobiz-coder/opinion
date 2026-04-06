@@ -147,6 +147,10 @@ export default function TopicCard({ topic, userVoted }: Props) {
             {topic.votingType === "yesno" ? "Yes/No" : topic.votingType === "rating" ? "Rating" : "Ranking"}
           </Text>
         </View>
+        <View style={[s.pill, { backgroundColor: colors.muted }]}>
+          <Feather name="message-circle" size={10} color={colors.mutedForeground} />
+          <Text style={s.pillLabel}>{topic.comments.length}</Text>
+        </View>
       </View>
     </Pressable>
   );
