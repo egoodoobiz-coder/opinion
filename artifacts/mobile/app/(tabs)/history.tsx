@@ -75,7 +75,7 @@ export default function HistoryScreen() {
     },
     voted: {
       icon: "thumbs-up" as const,
-      title: "No votes yet",
+      title: "No opinions yet",
       subtitle: "Topics you vote on will appear here",
       action: "Browse topics",
       onPress: () => router.push("/(tabs)/explore"),
@@ -114,7 +114,7 @@ export default function HistoryScreen() {
           onPress={() => setActiveTab("voted")}
         >
           <Text style={[s.subTabText, activeTab === "voted" && s.subTabTextActive]}>
-            Voted On
+            Opinions
           </Text>
           {votedTopics.length > 0 && (
             <View style={[s.badge, activeTab === "voted" && s.badgeActive]}>
