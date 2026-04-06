@@ -29,11 +29,11 @@ export default function HistoryScreen() {
   const userId = user?.id;
 
   const myTopics = topics
-    .filter((t) => t.authorId === userId)
+    .filter((t) => t.createdBy === userId)
     .sort((a, b) => b.createdAt - a.createdAt);
 
   const votedTopics = topics
-    .filter((t) => userVotes[t.id] && t.authorId !== userId)
+    .filter((t) => userVotes[t.id] && t.createdBy !== userId)
     .sort((a, b) => b.createdAt - a.createdAt);
 
   const s = styles(colors, insets);

@@ -8,7 +8,7 @@ import React, {
   useState,
 } from "react";
 
-export type VotingType = "yesno" | "rating" | "ranking";
+export type VotingType = "yesno" | "rating" | "ranking" | "aspects";
 
 export interface Comment {
   id: string;
@@ -45,6 +45,8 @@ export interface Topic {
   category: Category;
   votingType: VotingType;
   rankingOptions?: RankingOption[];
+  aspects?: string[];
+  aspectVotes?: Record<string, { up: number; down: number }>;
   createdAt: number;
   createdBy: string;
   yesCount: number;
@@ -59,7 +61,8 @@ export interface UserVote {
   topicId: string;
   yesno?: "yes" | "no";
   rating?: number;
-  ranking?: string[]; // ordered optionIds
+  ranking?: string[];
+  aspectChoices?: Record<string, "up" | "down">;
 }
 
 interface AppContextValue {
@@ -71,12 +74,13 @@ interface AppContextValue {
   voteYesNo: (topicId: string, vote: "yes" | "no") => void;
   voteRating: (topicId: string, rating: number) => void;
   voteRanking: (topicId: string, orderedIds: string[]) => void;
+  voteAspect: (topicId: string, aspect: string, choice: "up" | "down") => void;
   getUserVote: (topicId: string) => UserVote | undefined;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
 
-const TOPICS_KEY = "opinion_topics_v2";
+const TOPICS_KEY = "opinion_topics_v3";
 const VOTES_KEY = "rankit_votes";
 const USER_KEY = "rankit_user";
 
@@ -182,6 +186,30 @@ const SAMPLE_TOPICS: Topic[] = [
     rankingVotes: {},
     comments: [],
   },
+  {
+    id: "6",
+    title: "Rate this garage: City Motors",
+    description: "Have you visited City Motors? Tell us what you think about each aspect of their service.",
+    category: "automobiles",
+    votingType: "aspects",
+    aspects: ["Service", "Punctuality", "Staff", "Cleanliness", "Price", "Quality"],
+    aspectVotes: {
+      Service:     { up: 87, down: 23 },
+      Punctuality: { up: 61, down: 41 },
+      Staff:       { up: 94, down: 12 },
+      Cleanliness: { up: 78, down: 28 },
+      Price:       { up: 44, down: 68 },
+      Quality:     { up: 89, down: 17 },
+    },
+    createdAt: Date.now() - 3600000 * 8,
+    createdBy: "system",
+    yesCount: 0,
+    noCount: 0,
+    totalRating: 0,
+    ratingCount: 0,
+    rankingVotes: {},
+    comments: [],
+  },
 ];
 
 function generateId(): string {
@@ -217,6 +245,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           const migrated = parsed.map((t: any) => ({
             ...t,
             comments: t.comments ?? [],
+            aspectVotes: t.aspectVotes ?? {},
+            aspects: t.aspects ?? undefined,
           }));
           setTopics(migrated);
         } else {
@@ -259,6 +289,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         ratingCount: 0,
         rankingVotes: {},
         comments: [],
+        aspectVotes: topic.votingType === "aspects"
+          ? Object.fromEntries((topic.aspects ?? []).map((a) => [a, { up: 0, down: 0 }]))
+          : undefined,
       };
       if (premiumAccountType) {
         newTopic.premiumAccountType = premiumAccountType;
@@ -361,6 +394,51 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     [topics, userVotes, saveTopics, saveVotes]
   );
 
+  const voteAspect = useCallback(
+    (topicId: string, aspect: string, choice: "up" | "down") => {
+      const prev = userVotes[topicId];
+      const prevChoice = prev?.aspectChoices?.[aspect];
+
+      const updated = topics.map((t) => {
+        if (t.id !== topicId) return t;
+        const av = { ...(t.aspectVotes ?? {}) };
+        const current = av[aspect] ?? { up: 0, down: 0 };
+        const next = { ...current };
+
+        if (prevChoice === choice) {
+          // Toggle off
+          if (choice === "up") next.up = Math.max(0, next.up - 1);
+          else next.down = Math.max(0, next.down - 1);
+        } else {
+          if (prevChoice === "up") next.up = Math.max(0, next.up - 1);
+          if (prevChoice === "down") next.down = Math.max(0, next.down - 1);
+          if (choice === "up") next.up++;
+          else next.down++;
+        }
+
+        av[aspect] = next;
+        return { ...t, aspectVotes: av };
+      });
+
+      const prevChoices = prev?.aspectChoices ?? {};
+      const newChoice = prevChoices[aspect] === choice ? undefined : choice;
+      const nextChoices = { ...prevChoices };
+      if (newChoice === undefined) {
+        delete nextChoices[aspect];
+      } else {
+        nextChoices[aspect] = newChoice;
+      }
+
+      const newVotes = {
+        ...userVotes,
+        [topicId]: { ...prev, topicId, aspectChoices: nextChoices },
+      };
+      saveTopics(updated);
+      saveVotes(newVotes);
+    },
+    [topics, userVotes, saveTopics, saveVotes]
+  );
+
   const getUserVote = useCallback(
     (topicId: string) => userVotes[topicId],
     [userVotes]
@@ -397,6 +475,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         voteYesNo,
         voteRating,
         voteRanking,
+        voteAspect,
         getUserVote,
       }}
     >

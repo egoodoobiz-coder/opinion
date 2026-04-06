@@ -25,7 +25,7 @@ export default function TopicDetailScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { topics, getUserVote, voteYesNo, voteRating, voteRanking, addComment, userId } = useApp();
+  const { topics, getUserVote, voteYesNo, voteRating, voteRanking, voteAspect, addComment, userId } = useApp();
   const { user } = useUser();
 
   const topic = useMemo(() => topics.find((t) => t.id === id), [topics, id]);
@@ -70,6 +70,7 @@ export default function TopicDetailScreen() {
   const hasYesNo = topic.votingType === "yesno";
   const hasRating = topic.votingType === "rating";
   const hasRanking = topic.votingType === "ranking";
+  const hasAspects = topic.votingType === "aspects";
 
   const s = styles(colors, insets);
 
@@ -305,6 +306,89 @@ export default function TopicDetailScreen() {
             </View>
           </View>
         )}
+        {hasAspects && topic.aspects && (
+          <View style={s.section}>
+            <View style={s.sectionHeader}>
+              <Feather name="layers" size={15} color={colors.primary} />
+              <Text style={s.sectionTitle}>Aspect Rating</Text>
+              <Text style={s.voteCount}>
+                {topic.aspects.length} criteria
+              </Text>
+            </View>
+
+            <View style={s.aspectList}>
+              {topic.aspects.map((aspect) => {
+                const av = topic.aspectVotes?.[aspect] ?? { up: 0, down: 0 };
+                const total = av.up + av.down;
+                const upPct = total > 0 ? Math.round((av.up / total) * 100) : 0;
+                const userChoice = userVote?.aspectChoices?.[aspect];
+
+                return (
+                  <View key={aspect} style={s.aspectRow}>
+                    <View style={s.aspectTopRow}>
+                      <Text style={s.aspectLabel}>{aspect}</Text>
+                      <View style={s.aspectVoteBtns}>
+                        <Pressable
+                          style={({ pressed }) => [
+                            s.aspectBtn,
+                            s.aspectBtnUp,
+                            userChoice === "up" && s.aspectBtnUpActive,
+                            pressed && { opacity: 0.7 },
+                          ]}
+                          onPress={() => {
+                            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                            voteAspect(topic.id, aspect, "up");
+                          }}
+                        >
+                          <Feather
+                            name="thumbs-up"
+                            size={13}
+                            color={userChoice === "up" ? "#fff" : colors.yes}
+                          />
+                          <Text style={[s.aspectBtnLabel, { color: userChoice === "up" ? "#fff" : colors.yes }]}>
+                            {av.up}
+                          </Text>
+                        </Pressable>
+                        <Pressable
+                          style={({ pressed }) => [
+                            s.aspectBtn,
+                            s.aspectBtnDown,
+                            userChoice === "down" && s.aspectBtnDownActive,
+                            pressed && { opacity: 0.7 },
+                          ]}
+                          onPress={() => {
+                            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                            voteAspect(topic.id, aspect, "down");
+                          }}
+                        >
+                          <Feather
+                            name="thumbs-down"
+                            size={13}
+                            color={userChoice === "down" ? "#fff" : colors.no}
+                          />
+                          <Text style={[s.aspectBtnLabel, { color: userChoice === "down" ? "#fff" : colors.no }]}>
+                            {av.down}
+                          </Text>
+                        </Pressable>
+                      </View>
+                    </View>
+                    {total > 0 && (
+                      <View style={s.aspectBarWrap}>
+                        <View style={s.aspectBarBg}>
+                          <View
+                            style={[s.aspectBarFill, { width: `${upPct}%` as any, backgroundColor: colors.yes }]}
+                          />
+                        </View>
+                        <Text style={s.aspectPct}>{upPct}% 👍</Text>
+                      </View>
+                    )}
+                  </View>
+                );
+              })}
+            </View>
+          </View>
+        )}
+
         {/* Comments Section */}
         <View style={s.commentsSection}>
           <View style={s.commentsSectionHeader}>
@@ -541,6 +625,73 @@ const styles = (colors: ReturnType<typeof useColors>, insets: any) =>
       fontSize: 15,
       fontWeight: "700",
       color: colors.primaryForeground,
+    },
+    aspectList: { gap: 14 },
+    aspectRow: { gap: 6 },
+    aspectTopRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+    },
+    aspectLabel: {
+      fontSize: 14,
+      fontWeight: "600",
+      color: colors.foreground,
+      flex: 1,
+      marginRight: 8,
+    },
+    aspectVoteBtns: {
+      flexDirection: "row",
+      gap: 6,
+    },
+    aspectBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      borderRadius: 20,
+      borderWidth: 1.5,
+    },
+    aspectBtnUp: {
+      borderColor: colors.yes,
+      backgroundColor: colors.yes + "18",
+    },
+    aspectBtnUpActive: {
+      backgroundColor: colors.yes,
+    },
+    aspectBtnDown: {
+      borderColor: colors.no,
+      backgroundColor: colors.no + "18",
+    },
+    aspectBtnDownActive: {
+      backgroundColor: colors.no,
+    },
+    aspectBtnLabel: {
+      fontSize: 12,
+      fontWeight: "700",
+    },
+    aspectBarWrap: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+    },
+    aspectBarBg: {
+      flex: 1,
+      height: 5,
+      borderRadius: 3,
+      backgroundColor: colors.no + "33",
+      overflow: "hidden",
+    },
+    aspectBarFill: {
+      height: "100%",
+      borderRadius: 3,
+    },
+    aspectPct: {
+      fontSize: 11,
+      color: colors.mutedForeground,
+      width: 50,
+      textAlign: "right",
     },
     commentsSection: {
       gap: 12,

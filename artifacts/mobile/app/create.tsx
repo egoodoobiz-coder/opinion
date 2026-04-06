@@ -32,9 +32,12 @@ export default function CreateScreen() {
   const [category, setCategory] = useState<Category>("other");
   const [votingType, setVotingType] = useState<VotingType>("yesno");
   const [rankOptions, setRankOptions] = useState<string[]>(["", ""]);
+  const [aspectItems, setAspectItems] = useState<string[]>(["Service", "Punctuality", "Staff", "Cleanliness", "Price", "Quality"]);
   const inputRefs = useRef<Array<TextInput | null>>([]);
+  const aspectRefs = useRef<Array<TextInput | null>>([]);
 
   const needsRankOptions = votingType === "ranking";
+  const needsAspects = votingType === "aspects";
 
   function selectVotingType(vt: VotingType) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -60,6 +63,25 @@ export default function CreateScreen() {
     setRankOptions((prev) => prev.filter((_, i) => i !== idx));
   }
 
+  function updateAspectItem(idx: number, text: string) {
+    setAspectItems((prev) => prev.map((a, i) => (i === idx ? text : a)));
+  }
+
+  function addAspectItem() {
+    if (aspectItems.length >= 10) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setAspectItems((prev) => [...prev, ""]);
+    setTimeout(() => {
+      aspectRefs.current[aspectItems.length]?.focus();
+    }, 80);
+  }
+
+  function removeAspectItem(idx: number) {
+    if (aspectItems.length <= 2) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setAspectItems((prev) => prev.filter((_, i) => i !== idx));
+  }
+
   function submit() {
     if (!isSignedIn) {
       router.replace("/(auth)/sign-in" as Href);
@@ -72,6 +94,11 @@ export default function CreateScreen() {
     const validRankOpts = rankOptions.filter((o) => o.trim());
     if (needsRankOptions && validRankOpts.length < 2) {
       Alert.alert("Ranking options", "Add at least 2 options for ranking.");
+      return;
+    }
+    const validAspects = aspectItems.filter((a) => a.trim());
+    if (needsAspects && validAspects.length < 2) {
+      Alert.alert("Aspects", "Add at least 2 aspects for people to rate.");
       return;
     }
     const isPremium = (user?.unsafeMetadata as any)?.isPremium === true;
@@ -90,6 +117,7 @@ export default function CreateScreen() {
               label: label.trim(),
             }))
           : undefined,
+        aspects: needsAspects ? validAspects.map((a) => a.trim()) : undefined,
       },
       accountType
     );
@@ -210,6 +238,7 @@ export default function CreateScreen() {
                 { vt: "yesno" as VotingType, icon: "thumbs-up", label: "Yes / No", desc: "Simple agree or disagree" },
                 { vt: "rating" as VotingType, icon: "star", label: "Star Rating", desc: "Score from 1 to 5 stars" },
                 { vt: "ranking" as VotingType, icon: "list", label: "Ranking", desc: "Order a list of options" },
+                { vt: "aspects" as VotingType, icon: "layers", label: "Aspects", desc: "Rate multiple criteria with thumbs up/down" },
               ] as const
             ).map(({ vt, icon, label, desc }) => {
               const active = votingType === vt;
@@ -249,6 +278,59 @@ export default function CreateScreen() {
             })}
           </View>
         </View>
+
+        {/* Aspect Items */}
+        {needsAspects && (
+          <View style={s.field}>
+            <Text style={s.label}>Aspects to Rate</Text>
+            <Text style={s.sublabel}>People will give each a thumbs up or down</Text>
+            <View style={s.rankOptions}>
+              {aspectItems.map((item, idx) => (
+                <View key={idx} style={s.rankOptionRow}>
+                  <View style={[s.rankBadge, { backgroundColor: colors.primary + "22" }]}>
+                    <Feather name="layers" size={13} color={colors.primary} />
+                  </View>
+                  <ThemedInput
+                    ref={(ref) => { aspectRefs.current[idx] = ref; }}
+                    style={s.rankOptionInput}
+                    placeholder={`Aspect ${idx + 1} (e.g. Service)`}
+                    placeholderTextColor={colors.mutedForeground}
+                    value={item}
+                    onChangeText={(t) => updateAspectItem(idx, t)}
+                    returnKeyType={idx < aspectItems.length - 1 ? "next" : "done"}
+                    onSubmitEditing={() => {
+                      if (idx < aspectItems.length - 1) {
+                        aspectRefs.current[idx + 1]?.focus();
+                      } else if (aspectItems.length < 10) {
+                        addAspectItem();
+                      }
+                    }}
+                    blurOnSubmit={false}
+                  />
+                  {aspectItems.length > 2 && (
+                    <Pressable
+                      onPress={() => removeAspectItem(idx)}
+                      hitSlop={8}
+                      style={({ pressed }) => [s.removeBtn, pressed && { opacity: 0.5 }]}
+                    >
+                      <Feather name="x" size={16} color={colors.mutedForeground} />
+                    </Pressable>
+                  )}
+                </View>
+              ))}
+              {aspectItems.length < 10 && (
+                <Pressable
+                  style={({ pressed }) => [s.addOptionBtn, pressed && { opacity: 0.7 }]}
+                  onPress={addAspectItem}
+                >
+                  <Feather name="plus-circle" size={16} color={colors.primary} />
+                  <Text style={s.addOptionText}>Add another aspect</Text>
+                  <Text style={s.addOptionCount}>{aspectItems.length}/10</Text>
+                </Pressable>
+              )}
+            </View>
+          </View>
+        )}
 
         {/* Ranking Options */}
         {needsRankOptions && (

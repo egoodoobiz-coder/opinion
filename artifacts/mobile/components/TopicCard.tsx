@@ -41,6 +41,7 @@ export default function TopicCard({ topic, userVoted }: Props) {
   const hasYesNo = topic.votingType === "yesno";
   const hasRating = topic.votingType === "rating";
   const hasRanking = topic.votingType === "ranking";
+  const hasAspects = topic.votingType === "aspects";
 
   // Check if topic creator is premium (stored in topic.premiumAccountType)
   const isPremiumTopic = !!(topic as any).premiumAccountType;
@@ -134,17 +135,50 @@ export default function TopicCard({ topic, userVoted }: Props) {
             ))}
           </View>
         )}
+
+        {hasAspects && topic.aspects && topic.aspects.length > 0 && (
+          <View style={s.aspectPreview}>
+            {topic.aspects.slice(0, 4).map((aspect) => {
+              const av = topic.aspectVotes?.[aspect] ?? { up: 0, down: 0 };
+              const total = av.up + av.down;
+              const upPct = total > 0 ? Math.round((av.up / total) * 100) : null;
+              return (
+                <View key={aspect} style={s.aspectPreviewRow}>
+                  <Text style={s.aspectPreviewLabel} numberOfLines={1}>{aspect}</Text>
+                  {upPct !== null ? (
+                    <View style={s.aspectPreviewBarWrap}>
+                      <View style={s.aspectPreviewBar}>
+                        <View style={[s.aspectPreviewFill, { width: `${upPct}%` as any }]} />
+                      </View>
+                      <Text style={s.aspectPreviewPct}>{upPct}%</Text>
+                    </View>
+                  ) : (
+                    <Text style={s.aspectPreviewNone}>No votes yet</Text>
+                  )}
+                </View>
+              );
+            })}
+          </View>
+        )}
       </View>
 
       <View style={s.voteTypePills}>
         <View style={[s.pill, { backgroundColor: colors.muted }]}>
           <Feather
-            name={topic.votingType === "yesno" ? "thumbs-up" : topic.votingType === "rating" ? "star" : "list"}
+            name={
+              topic.votingType === "yesno" ? "thumbs-up"
+              : topic.votingType === "rating" ? "star"
+              : topic.votingType === "aspects" ? "layers"
+              : "list"
+            }
             size={10}
             color={colors.mutedForeground}
           />
           <Text style={s.pillLabel}>
-            {topic.votingType === "yesno" ? "Yes/No" : topic.votingType === "rating" ? "Rating" : "Ranking"}
+            {topic.votingType === "yesno" ? "Yes/No"
+              : topic.votingType === "rating" ? "Rating"
+              : topic.votingType === "aspects" ? "Aspects"
+              : "Ranking"}
           </Text>
         </View>
         <View style={[s.pill, { backgroundColor: colors.muted }]}>
@@ -241,6 +275,20 @@ const styles = (colors: ReturnType<typeof useColors>) =>
     rankItem: { flexDirection: "row", alignItems: "center", gap: 6 },
     rankNum: { fontSize: 11, fontWeight: "700", color: colors.primary, width: 22 },
     rankLabel: { fontSize: 12, color: colors.foreground, flex: 1 },
+    aspectPreview: { gap: 5 },
+    aspectPreviewRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+    aspectPreviewLabel: { fontSize: 11, fontWeight: "600", color: colors.foreground, width: 72 },
+    aspectPreviewBarWrap: { flex: 1, flexDirection: "row", alignItems: "center", gap: 5 },
+    aspectPreviewBar: {
+      flex: 1,
+      height: 4,
+      borderRadius: 2,
+      backgroundColor: colors.no + "33",
+      overflow: "hidden",
+    },
+    aspectPreviewFill: { height: "100%", borderRadius: 2, backgroundColor: colors.yes },
+    aspectPreviewPct: { fontSize: 10, color: colors.mutedForeground, width: 26, textAlign: "right" },
+    aspectPreviewNone: { fontSize: 10, color: colors.mutedForeground },
     voteTypePills: { flexDirection: "row", gap: 6, flexWrap: "wrap" },
     pill: {
       flexDirection: "row",

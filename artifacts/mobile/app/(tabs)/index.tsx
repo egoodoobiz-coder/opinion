@@ -34,10 +34,14 @@ export default function FeedScreen() {
     if (activeFilter === "new") {
       list.sort((a, b) => b.createdAt - a.createdAt);
     } else if (activeFilter === "top") {
-      list.sort(
-        (a, b) =>
-          b.yesCount + b.noCount + b.ratingCount - (a.yesCount + a.noCount + a.ratingCount)
-      );
+      const totalEngagement = (t: typeof list[0]) => {
+        const base = t.yesCount + t.noCount + t.ratingCount;
+        if (t.votingType === "aspects" && t.aspectVotes) {
+          return base + Object.values(t.aspectVotes).reduce((s, v) => s + v.up + v.down, 0);
+        }
+        return base;
+      };
+      list.sort((a, b) => totalEngagement(b) - totalEngagement(a));
     }
     // Promote premium topics to the top
     list.sort((a, b) => {
