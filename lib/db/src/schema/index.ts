@@ -23,7 +23,14 @@ export const verificationRequests = pgTable("verification_requests", {
   reviewedAt: timestamp("reviewed_at"),
 });
 
+export const admins = pgTable("admins", {
+  userId: text("user_id").primaryKey(),
+  userEmail: text("user_email"),
+  grantedAt: timestamp("granted_at").defaultNow(),
+});
+
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 export type VerificationRequest = typeof verificationRequests.$inferSelect;
 export type InsertVerificationRequest = typeof verificationRequests.$inferInsert;
+export type Admin = typeof admins.$inferSelect;

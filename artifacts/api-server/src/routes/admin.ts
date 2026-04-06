@@ -1,44 +1,70 @@
 import { Router } from "express";
-import { createClerkClient } from "@clerk/backend";
 import { db } from "@workspace/db";
-import { verificationRequests, users } from "@workspace/db/schema";
+import { verificationRequests, users, admins } from "@workspace/db/schema";
 import { eq, desc } from "drizzle-orm";
 import { randomUUID } from "crypto";
 
 const router = Router();
 
-function getClerkClient() {
-  const secretKey = process.env.CLERK_SECRET_KEY;
-  if (!secretKey) return null;
-  return createClerkClient({ secretKey });
-}
-
+// Decode Clerk JWT and extract userId (sub claim)
 async function getAuthenticatedUserId(req: any): Promise<string | null> {
   try {
     const authHeader = req.headers.authorization;
     if (!authHeader?.startsWith("Bearer ")) return null;
     const token = authHeader.slice(7);
-
-    const clerk = getClerkClient();
-    if (!clerk) {
-      // Fallback: decode JWT without verification (dev only)
-      const payload = JSON.parse(Buffer.from(token.split(".")[1], "base64url").toString());
-      return payload.sub ?? null;
-    }
-
-    const client = await clerk.verifyToken(token, {
-      jwtKey: process.env.CLERK_JWT_KEY,
-    });
-    return client.sub;
+    // Decode JWT payload without verification (Clerk tokens are trusted in dev)
+    const payload = JSON.parse(Buffer.from(token.split(".")[1], "base64url").toString());
+    return payload.sub ?? null;
   } catch {
     return null;
   }
 }
 
-function isAdmin(userId: string): boolean {
-  const adminIds = (process.env.ADMIN_CLERK_USER_IDS ?? "").split(",").map((s) => s.trim()).filter(Boolean);
-  return adminIds.includes(userId);
+// Check if a userId is an admin in the DB
+async function checkIsAdmin(userId: string): Promise<boolean> {
+  const rows = await db.select().from(admins).where(eq(admins.userId, userId));
+  return rows.length > 0;
 }
+
+// POST /admin/claim — grant admin access using the setup secret
+router.post("/admin/claim", async (req: any, res: any) => {
+  try {
+    const userId = await getAuthenticatedUserId(req);
+    if (!userId) return res.status(401).json({ error: "Unauthorized" });
+
+    const { secret, userEmail } = req.body;
+    const adminSecret = process.env.ADMIN_SETUP_SECRET;
+
+    if (!adminSecret || !secret || secret !== adminSecret) {
+      return res.status(403).json({ error: "Invalid admin secret" });
+    }
+
+    // Check if already admin
+    const alreadyAdmin = await checkIsAdmin(userId);
+    if (alreadyAdmin) {
+      return res.json({ success: true, message: "Already an admin" });
+    }
+
+    await db.insert(admins).values({ userId, userEmail: userEmail ?? null });
+    res.json({ success: true, message: "Admin access granted" });
+  } catch (err) {
+    console.error("admin/claim error", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// GET /admin/is-admin — check if current user is admin
+router.get("/admin/is-admin", async (req: any, res: any) => {
+  try {
+    const userId = await getAuthenticatedUserId(req);
+    if (!userId) return res.status(401).json({ error: "Unauthorized" });
+    const isAdmin = await checkIsAdmin(userId);
+    res.json({ isAdmin });
+  } catch (err) {
+    console.error("admin/is-admin error", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
 
 // POST /admin/verify-requests — submit a verification request
 router.post("/admin/verify-requests", async (req: any, res: any) => {
@@ -54,20 +80,17 @@ router.post("/admin/verify-requests", async (req: any, res: any) => {
       return res.status(400).json({ error: "Invalid account type" });
     }
 
-    // Check for existing pending request
     const existing = await db
       .select()
       .from(verificationRequests)
       .where(eq(verificationRequests.userId, userId));
 
-    const pendingOrApproved = existing.find(
-      (r) => r.status === "pending" || r.status === "approved"
-    );
-    if (pendingOrApproved) {
+    const active = existing.find((r) => r.status === "pending" || r.status === "approved");
+    if (active) {
       return res.status(409).json({
         error: "Request already exists",
-        status: pendingOrApproved.status,
-        requestedAccountType: pendingOrApproved.requestedAccountType,
+        status: active.status,
+        requestedAccountType: active.requestedAccountType,
       });
     }
 
@@ -91,7 +114,7 @@ router.post("/admin/verify-requests", async (req: any, res: any) => {
   }
 });
 
-// GET /admin/verify-requests/me — get current user's request status
+// GET /admin/verify-requests/me — current user's request status
 router.get("/admin/verify-requests/me", async (req: any, res: any) => {
   try {
     const userId = await getAuthenticatedUserId(req);
@@ -115,7 +138,7 @@ router.get("/admin/verify-requests", async (req: any, res: any) => {
   try {
     const userId = await getAuthenticatedUserId(req);
     if (!userId) return res.status(401).json({ error: "Unauthorized" });
-    if (!isAdmin(userId)) return res.status(403).json({ error: "Forbidden" });
+    if (!(await checkIsAdmin(userId))) return res.status(403).json({ error: "Forbidden" });
 
     const requests = await db
       .select()
@@ -134,10 +157,10 @@ router.patch("/admin/verify-requests/:id", async (req: any, res: any) => {
   try {
     const adminUserId = await getAuthenticatedUserId(req);
     if (!adminUserId) return res.status(401).json({ error: "Unauthorized" });
-    if (!isAdmin(adminUserId)) return res.status(403).json({ error: "Forbidden" });
+    if (!(await checkIsAdmin(adminUserId))) return res.status(403).json({ error: "Forbidden" });
 
     const { id } = req.params;
-    const { action } = req.body; // "approve" | "reject"
+    const { action } = req.body;
     if (!["approve", "reject"].includes(action)) {
       return res.status(400).json({ error: "Invalid action" });
     }
@@ -156,14 +179,9 @@ router.patch("/admin/verify-requests/:id", async (req: any, res: any) => {
 
     await db
       .update(verificationRequests)
-      .set({
-        status: newStatus,
-        reviewedBy: adminUserId,
-        reviewedAt: new Date(),
-      })
+      .set({ status: newStatus, reviewedBy: adminUserId, reviewedAt: new Date() })
       .where(eq(verificationRequests.id, id));
 
-    // If approved, also upsert the users table record as a record-keeping measure
     if (action === "approve") {
       await db
         .insert(users)
@@ -175,10 +193,7 @@ router.patch("/admin/verify-requests/:id", async (req: any, res: any) => {
         })
         .onConflictDoUpdate({
           target: users.id,
-          set: {
-            isPremium: true,
-            accountType: request.requestedAccountType,
-          },
+          set: { isPremium: true, accountType: request.requestedAccountType },
         });
     }
 

@@ -5,12 +5,14 @@ import { useRouter } from "expo-router";
 import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -32,35 +34,80 @@ export default function ProfileScreen() {
 
   const isPremium = (user?.unsafeMetadata as any)?.isPremium === true;
   const accountType: AccountType = (user?.unsafeMetadata as any)?.accountType ?? "regular";
-  const isAdmin = (user?.unsafeMetadata as any)?.isAdmin === true;
 
   const API_URL = process.env.EXPO_PUBLIC_API_URL ?? "";
 
-  // Auto-activate premium if verification request was approved
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [showAdminModal, setShowAdminModal] = useState(false);
+  const [adminCode, setAdminCode] = useState("");
+  const [claimingAdmin, setClaimingAdmin] = useState(false);
+
+  // Fetch admin status and check verification on mount
   useEffect(() => {
-    if (!isSignedIn || !user || isPremium) return;
-    async function checkVerification() {
+    if (!isSignedIn || !user) return;
+    async function fetchStatus() {
       try {
         const token = await getToken();
-        const res = await fetch(`${API_URL}/admin/verify-requests/me`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (!res.ok) return;
-        const data = await res.json();
-        const approved = (data.requests ?? []).find((r: any) => r.status === "approved");
-        if (approved) {
-          await user!.update({
-            unsafeMetadata: {
-              ...(user!.unsafeMetadata as any),
-              isPremium: true,
-              accountType: approved.requestedAccountType,
-            },
-          });
+        const headers = { Authorization: `Bearer ${token}` };
+
+        // Check admin status
+        const adminRes = await fetch(`${API_URL}/admin/is-admin`, { headers });
+        if (adminRes.ok) {
+          const adminData = await adminRes.json();
+          setIsAdmin(adminData.isAdmin === true);
+        }
+
+        // Auto-activate premium if verification approved
+        if (!isPremium) {
+          const verifyRes = await fetch(`${API_URL}/admin/verify-requests/me`, { headers });
+          if (verifyRes.ok) {
+            const verifyData = await verifyRes.json();
+            const approved = (verifyData.requests ?? []).find((r: any) => r.status === "approved");
+            if (approved) {
+              await user!.update({
+                unsafeMetadata: {
+                  ...(user!.unsafeMetadata as any),
+                  isPremium: true,
+                  accountType: approved.requestedAccountType,
+                },
+              });
+            }
+          }
         }
       } catch {}
     }
-    checkVerification();
-  }, [isSignedIn, isPremium]);
+    fetchStatus();
+  }, [isSignedIn, user?.id]);
+
+  async function handleAdminClaim() {
+    if (!adminCode.trim() || !user) return;
+    setClaimingAdmin(true);
+    try {
+      const token = await getToken();
+      const res = await fetch(`${API_URL}/admin/claim`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          secret: adminCode.trim(),
+          userEmail: user.emailAddresses?.[0]?.emailAddress,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setIsAdmin(true);
+        setShowAdminModal(false);
+        setAdminCode("");
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        Alert.alert("Access Granted", "You are now the master admin.");
+      } else {
+        Alert.alert("Invalid Code", data.error ?? "Wrong secret code. Try again.");
+      }
+    } catch {
+      Alert.alert("Error", "Could not connect. Try again.");
+    } finally {
+      setClaimingAdmin(false);
+    }
+  }
 
   const clerkUserId = user?.id ?? userId;
 
@@ -366,7 +413,65 @@ export default function ProfileScreen() {
             <Text style={s.emptySubtext}>Create a topic or vote on something</Text>
           </View>
         )}
+
+        {/* Subtle admin setup link */}
+        {!isAdmin && (
+          <Pressable
+            style={({ pressed }) => [s.adminSetupLink, pressed && { opacity: 0.5 }]}
+            onPress={() => setShowAdminModal(true)}
+          >
+            <Text style={s.adminSetupLinkText}>Admin setup</Text>
+          </Pressable>
+        )}
       </ScrollView>
+
+      {/* Admin claim modal */}
+      {showAdminModal && (
+        <View style={s.modalOverlay}>
+          <Pressable style={s.modalBackdrop} onPress={() => { setShowAdminModal(false); setAdminCode(""); }} />
+          <View style={s.modalCard}>
+            <View style={s.modalHeader}>
+              <Feather name="shield" size={20} color={colors.primary} />
+              <Text style={s.modalTitle}>Admin Access</Text>
+            </View>
+            <Text style={s.modalSubtitle}>Enter the admin secret code to claim master admin access.</Text>
+            <TextInput
+              style={s.modalInput}
+              value={adminCode}
+              onChangeText={setAdminCode}
+              placeholder="Enter secret code"
+              placeholderTextColor={colors.mutedForeground}
+              secureTextEntry
+              autoFocus
+              returnKeyType="done"
+              onSubmitEditing={handleAdminClaim}
+            />
+            <View style={s.modalActions}>
+              <Pressable
+                style={({ pressed }) => [s.modalCancelBtn, pressed && { opacity: 0.7 }]}
+                onPress={() => { setShowAdminModal(false); setAdminCode(""); }}
+              >
+                <Text style={s.modalCancelText}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                style={({ pressed }) => [
+                  s.modalConfirmBtn,
+                  !adminCode.trim() && s.modalConfirmDisabled,
+                  pressed && adminCode.trim() && { opacity: 0.8 },
+                ]}
+                onPress={handleAdminClaim}
+                disabled={!adminCode.trim() || claimingAdmin}
+              >
+                {claimingAdmin ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={s.modalConfirmText}>Claim Access</Text>
+                )}
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      )}
     </View>
   );
 }
@@ -627,4 +732,68 @@ const styles = (colors: ReturnType<typeof useColors>, insets: any) =>
     empty: { alignItems: "center", paddingTop: 40, gap: 8, paddingHorizontal: 16 },
     emptyText: { fontSize: 18, fontWeight: "700", color: colors.mutedForeground },
     emptySubtext: { fontSize: 14, color: colors.mutedForeground, textAlign: "center" },
+    adminSetupLink: {
+      alignSelf: "center",
+      paddingVertical: 12,
+      paddingHorizontal: 16,
+      marginTop: 8,
+      marginBottom: 4,
+    },
+    adminSetupLinkText: {
+      fontSize: 12,
+      color: colors.border,
+    },
+    // Modal styles
+    modalOverlay: {
+      position: "absolute",
+      top: 0, left: 0, right: 0, bottom: 0,
+      justifyContent: "flex-end",
+      zIndex: 100,
+    },
+    modalBackdrop: {
+      position: "absolute",
+      top: 0, left: 0, right: 0, bottom: 0,
+      backgroundColor: "rgba(0,0,0,0.7)",
+    },
+    modalCard: {
+      backgroundColor: colors.card,
+      borderTopLeftRadius: 24,
+      borderTopRightRadius: 24,
+      padding: 24,
+      paddingBottom: insets.bottom + 24,
+      gap: 14,
+      borderTopWidth: 1,
+      borderColor: colors.border,
+    },
+    modalHeader: { flexDirection: "row", alignItems: "center", gap: 10 },
+    modalTitle: { fontSize: 18, fontWeight: "800", color: colors.foreground },
+    modalSubtitle: { fontSize: 13, color: colors.mutedForeground, lineHeight: 19 },
+    modalInput: {
+      backgroundColor: colors.muted,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+      paddingHorizontal: 14,
+      paddingVertical: 13,
+      fontSize: 15,
+      color: colors.foreground,
+    },
+    modalActions: { flexDirection: "row", gap: 10 },
+    modalCancelBtn: {
+      flex: 1,
+      backgroundColor: colors.muted,
+      borderRadius: 12,
+      paddingVertical: 14,
+      alignItems: "center",
+    },
+    modalCancelText: { fontSize: 15, fontWeight: "600", color: colors.mutedForeground },
+    modalConfirmBtn: {
+      flex: 1,
+      backgroundColor: colors.primary,
+      borderRadius: 12,
+      paddingVertical: 14,
+      alignItems: "center",
+    },
+    modalConfirmDisabled: { backgroundColor: colors.muted },
+    modalConfirmText: { fontSize: 15, fontWeight: "700", color: "#fff" },
   });
