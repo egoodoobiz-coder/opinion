@@ -160,11 +160,21 @@ export default function ProfileScreen() {
         </View>
 
         {/* User info */}
-        <View style={s.userCard}>
+        <Pressable
+          style={({ pressed }) => [s.userCard, pressed && { opacity: 0.85 }]}
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            router.push("/edit-profile");
+          }}
+        >
           <View style={s.avatarContainer}>
             <View style={s.avatar}>
               <Text style={s.avatarText}>
-                {(user?.emailAddresses?.[0]?.emailAddress ?? "U")[0].toUpperCase()}
+                {(
+                  (user?.firstName?.[0] ?? "") +
+                  (user?.lastName?.[0] ?? "") ||
+                  (user?.emailAddresses?.[0]?.emailAddress ?? "U")[0]
+                ).toUpperCase()}
               </Text>
             </View>
             {isPremium && (
@@ -176,7 +186,9 @@ export default function ProfileScreen() {
           <View style={s.userInfo}>
             <View style={s.nameRow}>
               <Text style={s.userName} numberOfLines={1}>
-                {user?.firstName ?? user?.emailAddresses?.[0]?.emailAddress?.split("@")[0] ?? "You"}
+                {[user?.firstName, user?.lastName].filter(Boolean).join(" ") ||
+                  user?.emailAddresses?.[0]?.emailAddress?.split("@")[0] ||
+                  "You"}
               </Text>
               {isPremium && (
                 <View style={[s.badge, accountType === "celebrity" ? s.badgeCelebrity : s.badgeCompany]}>
@@ -191,7 +203,10 @@ export default function ProfileScreen() {
               {user?.emailAddresses?.[0]?.emailAddress ?? ""}
             </Text>
           </View>
-        </View>
+          <View style={s.editIconWrap}>
+            <Feather name="edit-2" size={14} color={colors.mutedForeground} />
+          </View>
+        </Pressable>
 
         {/* Stats */}
         <View style={s.statsRow}>
@@ -378,6 +393,14 @@ const styles = (colors: ReturnType<typeof useColors>, insets: any) =>
       borderColor: colors.card,
     },
     userInfo: { flex: 1 },
+    editIconWrap: {
+      width: 28,
+      height: 28,
+      borderRadius: 14,
+      backgroundColor: colors.muted,
+      alignItems: "center",
+      justifyContent: "center",
+    },
     nameRow: { flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" },
     userName: {
       fontSize: 16,
