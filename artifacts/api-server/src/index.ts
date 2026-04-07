@@ -54,10 +54,25 @@ if (Number.isNaN(port) || port <= 0) {
 
 await initStripe();
 
-app.listen(port, (err) => {
+const server = app.listen(port, (err) => {
   if (err) {
     logger.error({ err }, "Error listening on port");
     process.exit(1);
   }
   logger.info({ port }, "Server listening");
 });
+
+// Graceful shutdown — release the port immediately on SIGTERM/SIGINT
+// so the next restart doesn't hit EADDRINUSE
+function shutdown(signal: string) {
+  logger.info({ signal }, "Shutting down gracefully...");
+  server.close(() => {
+    logger.info("HTTP server closed");
+    process.exit(0);
+  });
+  // Force-exit after 3 s if connections are still open
+  setTimeout(() => process.exit(0), 3000).unref();
+}
+
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("SIGINT", () => shutdown("SIGINT"));
