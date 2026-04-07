@@ -9,7 +9,7 @@ import {
   View,
 } from "react-native";
 import { useColors } from "@/hooks/useColors";
-import type { Topic } from "@/context/AppContext";
+import { useApp, type Topic } from "@/context/AppContext";
 import { CATEGORY_CONFIG } from "@/constants/categories";
 
 interface Props {
@@ -32,7 +32,17 @@ export default function TopicCard({ topic, userVoted }: Props) {
   const colors = useColors();
   const router = useRouter();
   const { user } = useUser();
+  const { userDemographics } = useApp();
   const cat = CATEGORY_CONFIG[topic.category];
+
+  const isTargetedAtMe = (() => {
+    const td = topic.targetDemographics;
+    if (!td) return false;
+    const hasSomeDemo = Object.values(userDemographics).some(Boolean);
+    if (!hasSomeDemo) return false;
+    const fields: Array<keyof typeof userDemographics> = ["ageRange", "gender", "occupation"];
+    return fields.some((f) => td[f] && td[f] === userDemographics[f]);
+  })();
   const total = topic.yesCount + topic.noCount;
   const yesPercent = total > 0 ? Math.round((topic.yesCount / total) * 100) : null;
   const avg = avgRating(topic);
@@ -74,6 +84,12 @@ export default function TopicCard({ topic, userVoted }: Props) {
               <Text style={s.verifiedText}>
                 {premiumType === "celebrity" ? "Celebrity" : "Company"}
               </Text>
+            </View>
+          )}
+          {isTargetedAtMe && (
+            <View style={s.forYouBadge}>
+              <Feather name="user-check" size={9} color="#10b981" />
+              <Text style={s.forYouText}>For You</Text>
             </View>
           )}
         </View>
@@ -238,6 +254,13 @@ const styles = (colors: ReturnType<typeof useColors>) =>
     verifiedCompany: { backgroundColor: colors.primary },
     verifiedCelebrity: { backgroundColor: colors.star },
     verifiedText: { fontSize: 10, fontWeight: "700", color: "#fff" },
+    forYouBadge: {
+      flexDirection: "row", alignItems: "center", gap: 3,
+      backgroundColor: "#10b98122",
+      paddingHorizontal: 7, paddingVertical: 3, borderRadius: 100,
+      borderWidth: 1, borderColor: "#10b98144",
+    },
+    forYouText: { fontSize: 10, fontWeight: "700", color: "#10b981" },
     headerRight: { flexDirection: "row", alignItems: "center", gap: 8 },
     votedBadge: {
       flexDirection: "row",

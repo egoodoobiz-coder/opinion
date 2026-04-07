@@ -13,25 +13,40 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import TopicCard from "@/components/TopicCard";
 import { ALL_CATEGORIES, CATEGORY_CONFIG } from "@/constants/categories";
+import { useUser } from "@clerk/expo";
 import { useApp, type Category } from "@/context/AppContext";
 import { useColors } from "@/hooks/useColors";
 
-type Filter = "all" | "new" | "top";
+type Filter = "all" | "new" | "top" | "forme";
 
 export default function FeedScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { topics, userVotes } = useApp();
+  const { topics, userVotes, userDemographics } = useApp();
+  const { user } = useUser();
   const [activeFilter, setActiveFilter] = useState<Filter>("new");
   const [activeCategory, setActiveCategory] = useState<Category | "all">("all");
+
+  const hasDemo = Object.values(userDemographics).some(Boolean);
+
+  function demoMatches(topic: typeof topics[0]): boolean {
+    const td = topic.targetDemographics;
+    if (!td) return true;
+    if (!hasDemo) return true;
+    const fields: Array<keyof typeof userDemographics> = ["ageRange", "gender", "occupation"];
+    return fields.every((f) => !td[f] || td[f] === userDemographics[f]);
+  }
 
   const filtered = useMemo(() => {
     let list = [...topics];
     if (activeCategory !== "all") {
       list = list.filter((t) => t.category === activeCategory);
     }
-    if (activeFilter === "new") {
+    if (activeFilter === "forme") {
+      list = list.filter(demoMatches);
+    }
+    if (activeFilter === "new" || activeFilter === "forme") {
       list.sort((a, b) => b.createdAt - a.createdAt);
     } else if (activeFilter === "top") {
       const totalEngagement = (t: typeof list[0]) => {
@@ -43,7 +58,6 @@ export default function FeedScreen() {
       };
       list.sort((a, b) => totalEngagement(b) - totalEngagement(a));
     }
-    // Promote premium topics to the top
     list.sort((a, b) => {
       const aPremium = !!(a as any).premiumAccountType;
       const bPremium = !!(b as any).premiumAccountType;
@@ -52,7 +66,7 @@ export default function FeedScreen() {
       return 0;
     });
     return list;
-  }, [topics, activeFilter, activeCategory]);
+  }, [topics, activeFilter, activeCategory, userDemographics, hasDemo]);
 
   const s = styles(colors, insets);
 
@@ -85,16 +99,27 @@ export default function FeedScreen() {
               style={[s.filterBtn, activeFilter === f && s.filterBtnActive]}
               onPress={() => setActiveFilter(f)}
             >
-              <Text
-                style={[
-                  s.filterLabel,
-                  activeFilter === f && s.filterLabelActive,
-                ]}
-              >
+              <Text style={[s.filterLabel, activeFilter === f && s.filterLabelActive]}>
                 {f === "all" ? "All" : f === "new" ? "New" : "Top"}
               </Text>
             </Pressable>
           ))}
+          <Pressable
+            style={[s.filterBtn, s.filterBtnForMe, activeFilter === "forme" && s.filterBtnForMeActive]}
+            onPress={() => setActiveFilter(activeFilter === "forme" ? "new" : "forme")}
+          >
+            <Feather
+              name="user"
+              size={11}
+              color={activeFilter === "forme" ? "#fff" : colors.mutedForeground}
+            />
+            <Text style={[s.filterLabel, activeFilter === "forme" && s.filterLabelForMeActive]}>
+              For Me
+            </Text>
+            {!hasDemo && (
+              <View style={s.demoWarningDot} />
+            )}
+          </Pressable>
           <View style={s.divider} />
           <Pressable
             style={[
@@ -227,6 +252,13 @@ const styles = (colors: ReturnType<typeof useColors>, insets: any) =>
       backgroundColor: colors.primary + "22",
       borderColor: colors.primary,
     },
+    filterBtnForMe: {
+      borderColor: "#10b981",
+    },
+    filterBtnForMeActive: {
+      backgroundColor: "#10b981",
+      borderColor: "#10b981",
+    },
     filterLabel: {
       fontSize: 12,
       fontWeight: "500",
@@ -235,6 +267,14 @@ const styles = (colors: ReturnType<typeof useColors>, insets: any) =>
     filterLabelActive: {
       color: colors.primary,
       fontWeight: "700",
+    },
+    filterLabelForMeActive: {
+      color: "#fff",
+      fontWeight: "700",
+    },
+    demoWarningDot: {
+      width: 6, height: 6, borderRadius: 3,
+      backgroundColor: "#f59e0b",
     },
     divider: {
       width: 1,

@@ -16,7 +16,7 @@ import ThemedInput from "@/components/ThemedInput";
 import type { TextInput } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ALL_CATEGORIES, CATEGORY_CONFIG } from "@/constants/categories";
-import { useApp, type Category, type VotingType } from "@/context/AppContext";
+import { useApp, type Category, type VotingType, type UserDemographics } from "@/context/AppContext";
 import { useColors } from "@/hooks/useColors";
 
 export default function CreateScreen() {
@@ -33,11 +33,21 @@ export default function CreateScreen() {
   const [votingType, setVotingType] = useState<VotingType>("yesno");
   const [rankOptions, setRankOptions] = useState<string[]>(["", ""]);
   const [aspectItems, setAspectItems] = useState<string[]>(["Service", "Punctuality", "Staff", "Cleanliness", "Price", "Quality"]);
+  const [targetAgeRange, setTargetAgeRange] = useState("");
+  const [targetGender, setTargetGender] = useState("");
+  const [targetOccupation, setTargetOccupation] = useState("");
+  const [showTargeting, setShowTargeting] = useState(false);
   const inputRefs = useRef<Array<TextInput | null>>([]);
   const aspectRefs = useRef<Array<TextInput | null>>([]);
 
   const needsRankOptions = votingType === "ranking";
   const needsAspects = votingType === "aspects";
+
+  const AGE_RANGES = ["Under 18", "18–24", "25–34", "35–44", "45–54", "55–64", "65+"];
+  const GENDERS = ["Male", "Female", "Non-binary", "Prefer not to say"];
+  const OCCUPATIONS = ["Student", "Employed", "Self-employed", "Unemployed", "Retired"];
+
+  const targetingCount = [targetAgeRange, targetGender, targetOccupation].filter(Boolean).length;
 
   function selectVotingType(vt: VotingType) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -105,6 +115,15 @@ export default function CreateScreen() {
     const accountType = isPremium
       ? (user?.unsafeMetadata as any)?.accountType
       : undefined;
+    const targetDemographics: UserDemographics | undefined =
+      targetAgeRange || targetGender || targetOccupation
+        ? {
+            ageRange: targetAgeRange || undefined,
+            gender: targetGender || undefined,
+            occupation: targetOccupation || undefined,
+          }
+        : undefined;
+
     addTopic(
       {
         title: title.trim(),
@@ -118,6 +137,7 @@ export default function CreateScreen() {
             }))
           : undefined,
         aspects: needsAspects ? validAspects.map((a) => a.trim()) : undefined,
+        targetDemographics,
       },
       accountType
     );
@@ -331,6 +351,105 @@ export default function CreateScreen() {
             </View>
           </View>
         )}
+
+        {/* Target Audience */}
+        <View style={s.field}>
+          <Pressable
+            style={s.targetingHeader}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              setShowTargeting((v) => !v);
+            }}
+          >
+            <View style={s.targetingHeaderLeft}>
+              <Feather name="users" size={15} color={targetingCount > 0 ? colors.primary : colors.mutedForeground} />
+              <Text style={[s.targetingTitle, targetingCount > 0 && { color: colors.primary }]}>
+                Target Audience
+              </Text>
+              {targetingCount > 0 && (
+                <View style={s.targetingBadge}>
+                  <Text style={s.targetingBadgeText}>{targetingCount} set</Text>
+                </View>
+              )}
+            </View>
+            <Feather
+              name={showTargeting ? "chevron-up" : "chevron-down"}
+              size={16}
+              color={colors.mutedForeground}
+            />
+          </Pressable>
+
+          {showTargeting && (
+            <View style={s.targetingBody}>
+              <Text style={s.targetingHint}>
+                Optionally narrow who you want responses from. Leave blank for everyone.
+              </Text>
+
+              <View style={s.targetSection}>
+                <Text style={s.targetSectionLabel}>Age range</Text>
+                <View style={s.chipRow}>
+                  {AGE_RANGES.map((v) => {
+                    const active = v === targetAgeRange;
+                    return (
+                      <Pressable
+                        key={v}
+                        style={[s.chip, active && s.chipActive]}
+                        onPress={() => {
+                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                          setTargetAgeRange(active ? "" : v);
+                        }}
+                      >
+                        <Text style={[s.chipText, active && s.chipTextActive]}>{v}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </View>
+
+              <View style={s.targetSection}>
+                <Text style={s.targetSectionLabel}>Gender</Text>
+                <View style={s.chipRow}>
+                  {GENDERS.map((v) => {
+                    const active = v === targetGender;
+                    return (
+                      <Pressable
+                        key={v}
+                        style={[s.chip, active && s.chipActive]}
+                        onPress={() => {
+                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                          setTargetGender(active ? "" : v);
+                        }}
+                      >
+                        <Text style={[s.chipText, active && s.chipTextActive]}>{v}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </View>
+
+              <View style={s.targetSection}>
+                <Text style={s.targetSectionLabel}>Occupation</Text>
+                <View style={s.chipRow}>
+                  {OCCUPATIONS.map((v) => {
+                    const active = v === targetOccupation;
+                    return (
+                      <Pressable
+                        key={v}
+                        style={[s.chip, active && s.chipActive]}
+                        onPress={() => {
+                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                          setTargetOccupation(active ? "" : v);
+                        }}
+                      >
+                        <Text style={[s.chipText, active && s.chipTextActive]}>{v}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </View>
+            </View>
+          )}
+        </View>
 
         {/* Ranking Options */}
         {needsRankOptions && (
@@ -597,4 +716,45 @@ const styles = (colors: ReturnType<typeof useColors>, insets: any) =>
       fontSize: 12,
       color: colors.mutedForeground,
     },
+    targetingHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingVertical: 14,
+      paddingHorizontal: 14,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.card,
+    },
+    targetingHeaderLeft: { flexDirection: "row", alignItems: "center", gap: 8, flex: 1 },
+    targetingTitle: { fontSize: 14, fontWeight: "600", color: colors.mutedForeground },
+    targetingBadge: {
+      backgroundColor: colors.primary + "22",
+      borderRadius: 100,
+      paddingHorizontal: 7,
+      paddingVertical: 2,
+    },
+    targetingBadgeText: { fontSize: 11, fontWeight: "700", color: colors.primary },
+    targetingBody: {
+      backgroundColor: colors.card,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: colors.border,
+      padding: 14,
+      gap: 16,
+      marginTop: 8,
+    },
+    targetingHint: { fontSize: 12, color: colors.mutedForeground, lineHeight: 17 },
+    targetSection: { gap: 8 },
+    targetSectionLabel: { fontSize: 13, fontWeight: "600", color: colors.foreground },
+    chipRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+    chip: {
+      paddingHorizontal: 11, paddingVertical: 6,
+      borderRadius: 100, borderWidth: 1,
+      borderColor: colors.border, backgroundColor: colors.muted,
+    },
+    chipActive: { backgroundColor: colors.primary + "22", borderColor: colors.primary },
+    chipText: { fontSize: 12, color: colors.mutedForeground, fontWeight: "500" },
+    chipTextActive: { color: colors.primary, fontWeight: "700" },
   });

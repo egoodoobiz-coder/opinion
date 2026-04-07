@@ -17,7 +17,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import RankingVote from "@/components/RankingVote";
 import StarRating from "@/components/StarRating";
 import { CATEGORY_CONFIG } from "@/constants/categories";
-import { useApp } from "@/context/AppContext";
+import { useApp, type DemoBreakdown } from "@/context/AppContext";
 import { useColors } from "@/hooks/useColors";
 
 export default function TopicDetailScreen() {
@@ -389,6 +389,11 @@ export default function TopicDetailScreen() {
           </View>
         )}
 
+        {/* Demographic Breakdown */}
+        {topic.demoBreakdown && Object.keys(topic.demoBreakdown).length > 0 && (
+          <DemoBreakdownPanel breakdown={topic.demoBreakdown} colors={colors} s={s} />
+        )}
+
         {/* Comments Section */}
         <View style={s.commentsSection}>
           <View style={s.commentsSectionHeader}>
@@ -451,6 +456,73 @@ export default function TopicDetailScreen() {
         </Pressable>
       </View>
     </KeyboardAvoidingView>
+  );
+}
+
+const DEMO_LABELS: Record<keyof DemoBreakdown, string> = {
+  ageRange: "Age Range",
+  gender: "Gender",
+  country: "Country",
+  occupation: "Occupation",
+};
+
+function DemoBreakdownPanel({
+  breakdown,
+  colors,
+  s,
+}: {
+  breakdown: DemoBreakdown;
+  colors: ReturnType<typeof useColors>;
+  s: any;
+}) {
+  const [expanded, setExpanded] = React.useState(false);
+  const fields = (Object.keys(breakdown) as Array<keyof DemoBreakdown>).filter(
+    (k) => breakdown[k] && Object.keys(breakdown[k]!).length > 0
+  );
+  if (fields.length === 0) return null;
+
+  return (
+    <View style={s.section}>
+      <Pressable
+        style={s.sectionHeader}
+        onPress={() => setExpanded((v) => !v)}
+      >
+        <Feather name="bar-chart-2" size={15} color={colors.primary} />
+        <Text style={s.sectionTitle}>Who Voted</Text>
+        <Text style={s.voteCount}>{fields.length} breakdown{fields.length > 1 ? "s" : ""}</Text>
+        <Feather name={expanded ? "chevron-up" : "chevron-down"} size={14} color={colors.mutedForeground} />
+      </Pressable>
+
+      {expanded && (
+        <View style={s.breakdownBody}>
+          {fields.map((field) => {
+            const data = breakdown[field]!;
+            const total = Object.values(data).reduce((a, b) => a + b, 0);
+            const sorted = Object.entries(data).sort((a, b) => b[1] - a[1]);
+            return (
+              <View key={field} style={s.breakdownGroup}>
+                <Text style={s.breakdownGroupLabel}>{DEMO_LABELS[field]}</Text>
+                {sorted.map(([key, count]) => {
+                  const pct = total > 0 ? Math.round((count / total) * 100) : 0;
+                  return (
+                    <View key={key} style={s.breakdownRow}>
+                      <Text style={s.breakdownKey} numberOfLines={1}>{key}</Text>
+                      <View style={s.breakdownBarWrap}>
+                        <View style={s.breakdownBarBg}>
+                          <View style={[s.breakdownBarFill, { width: `${pct}%` as any }]} />
+                        </View>
+                        <Text style={s.breakdownPct}>{pct}%</Text>
+                      </View>
+                      <Text style={s.breakdownCount}>{count}</Text>
+                    </View>
+                  );
+                })}
+              </View>
+            );
+          })}
+        </View>
+      )}
+    </View>
   );
 }
 
@@ -789,6 +861,26 @@ const styles = (colors: ReturnType<typeof useColors>, insets: any) =>
       justifyContent: "center",
       flexShrink: 0,
     },
+    breakdownBody: { gap: 16 },
+    breakdownGroup: { gap: 8 },
+    breakdownGroupLabel: {
+      fontSize: 12, fontWeight: "700",
+      color: colors.mutedForeground,
+      textTransform: "uppercase", letterSpacing: 0.6,
+    },
+    breakdownRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+    breakdownKey: {
+      fontSize: 12, color: colors.foreground,
+      width: 90, fontWeight: "500",
+    },
+    breakdownBarWrap: { flex: 1, flexDirection: "row", alignItems: "center", gap: 6 },
+    breakdownBarBg: {
+      flex: 1, height: 6, borderRadius: 3,
+      backgroundColor: colors.border, overflow: "hidden",
+    },
+    breakdownBarFill: { height: "100%", borderRadius: 3, backgroundColor: colors.primary },
+    breakdownPct: { fontSize: 11, color: colors.mutedForeground, width: 32, textAlign: "right" },
+    breakdownCount: { fontSize: 11, color: colors.mutedForeground, width: 28, textAlign: "right" },
   });
 
 function formatTime(ts: number) {

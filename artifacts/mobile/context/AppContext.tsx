@@ -10,6 +10,20 @@ import React, {
 
 export type VotingType = "yesno" | "rating" | "ranking" | "aspects";
 
+export interface UserDemographics {
+  ageRange?: string;
+  gender?: string;
+  country?: string;
+  occupation?: string;
+}
+
+export interface DemoBreakdown {
+  ageRange?: Record<string, number>;
+  gender?: Record<string, number>;
+  country?: Record<string, number>;
+  occupation?: Record<string, number>;
+}
+
 export interface Comment {
   id: string;
   topicId: string;
@@ -47,6 +61,8 @@ export interface Topic {
   rankingOptions?: RankingOption[];
   aspects?: string[];
   aspectVotes?: Record<string, { up: number; down: number }>;
+  targetDemographics?: UserDemographics;
+  demoBreakdown?: DemoBreakdown;
   createdAt: number;
   createdBy: string;
   yesCount: number;
@@ -63,13 +79,18 @@ export interface UserVote {
   rating?: number;
   ranking?: string[];
   aspectChoices?: Record<string, "up" | "down">;
+  voterDemo?: UserDemographics;
 }
 
 interface AppContextValue {
   topics: Topic[];
   userVotes: Record<string, UserVote>;
   userId: string;
-  addTopic: (topic: Omit<Topic, "id" | "createdAt" | "yesCount" | "noCount" | "totalRating" | "ratingCount" | "rankingVotes" | "createdBy" | "comments">, premiumAccountType?: string) => void;
+  userDemographics: UserDemographics;
+  addTopic: (
+    topic: Omit<Topic, "id" | "createdAt" | "yesCount" | "noCount" | "totalRating" | "ratingCount" | "rankingVotes" | "createdBy" | "comments" | "demoBreakdown">,
+    premiumAccountType?: string
+  ) => void;
   addComment: (topicId: string, text: string, authorId: string, authorName: string) => void;
   voteYesNo: (topicId: string, vote: "yes" | "no") => void;
   voteRating: (topicId: string, rating: number) => void;
@@ -99,6 +120,11 @@ const SAMPLE_TOPICS: Topic[] = [
     ratingCount: 189,
     rankingVotes: {},
     comments: [],
+    demoBreakdown: {
+      ageRange: { "18–24": 48, "25–34": 91, "35–44": 62, "45–54": 34, "65+": 10 },
+      gender: { Male: 174, Female: 146, "Non-binary": 25 },
+      occupation: { Student: 89, Employed: 178, Retired: 28 },
+    },
   },
   {
     id: "2",
@@ -127,6 +153,10 @@ const SAMPLE_TOPICS: Topic[] = [
       prime: [5, 5, 4, 5, 5, 5, 5, 5],
     },
     comments: [],
+    demoBreakdown: {
+      ageRange: { "18–24": 24, "25–34": 38, "35–44": 18, "45–54": 7 },
+      gender: { Male: 52, Female: 29, "Non-binary": 6 },
+    },
   },
   {
     id: "3",
@@ -134,6 +164,7 @@ const SAMPLE_TOPICS: Topic[] = [
     description: "Post-pandemic, is remote-first the right move for companies?",
     category: "lifestyle",
     votingType: "yesno",
+    targetDemographics: { occupation: "Employed" },
     createdAt: Date.now() - 3600000 * 5,
     createdBy: "system",
     yesCount: 876,
@@ -142,6 +173,11 @@ const SAMPLE_TOPICS: Topic[] = [
     ratingCount: 576,
     rankingVotes: {},
     comments: [],
+    demoBreakdown: {
+      ageRange: { "18–24": 201, "25–34": 398, "35–44": 267, "45–54": 102, "55–64": 32 },
+      gender: { Male: 489, Female: 412, "Non-binary": 99 },
+      occupation: { Employed: 612, "Self-employed": 198, Student: 87, Retired: 33 },
+    },
   },
   {
     id: "4",
@@ -209,11 +245,33 @@ const SAMPLE_TOPICS: Topic[] = [
     ratingCount: 0,
     rankingVotes: {},
     comments: [],
+    demoBreakdown: {
+      ageRange: { "25–34": 41, "35–44": 58, "45–54": 27, "55–64": 18 },
+      gender: { Male: 98, Female: 46 },
+    },
   },
 ];
 
 function generateId(): string {
   return Date.now().toString() + Math.random().toString(36).substr(2, 9);
+}
+
+function applyDemoToBreakdown(
+  breakdown: DemoBreakdown,
+  demo: UserDemographics,
+  delta: 1 | -1
+): DemoBreakdown {
+  const result: DemoBreakdown = { ...breakdown };
+  const fields: Array<keyof UserDemographics> = ["ageRange", "gender", "country", "occupation"];
+  for (const field of fields) {
+    const val = demo[field];
+    if (!val) continue;
+    const current = result[field] ?? {};
+    const next = { ...current };
+    next[val] = Math.max(0, (next[val] ?? 0) + delta);
+    result[field] = next;
+  }
+  return result;
 }
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
@@ -223,6 +281,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [loaded, setLoaded] = useState(false);
   const { user } = useUser();
   const clerkUserId = user?.id;
+
+  const userDemographics: UserDemographics = (user?.unsafeMetadata as any)?.demographics ?? {};
 
   useEffect(() => {
     (async () => {
@@ -247,6 +307,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             comments: t.comments ?? [],
             aspectVotes: t.aspectVotes ?? {},
             aspects: t.aspects ?? undefined,
+            demoBreakdown: t.demoBreakdown ?? {},
+            targetDemographics: t.targetDemographics ?? undefined,
           }));
           setTopics(migrated);
         } else {
@@ -276,7 +338,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const addTopic = useCallback(
-    (topic: Omit<Topic, "id" | "createdAt" | "yesCount" | "noCount" | "totalRating" | "ratingCount" | "rankingVotes" | "createdBy">, premiumAccountType?: string) => {
+    (
+      topic: Omit<Topic, "id" | "createdAt" | "yesCount" | "noCount" | "totalRating" | "ratingCount" | "rankingVotes" | "createdBy" | "comments" | "demoBreakdown">,
+      premiumAccountType?: string
+    ) => {
       const effectiveUserId = clerkUserId ?? userId;
       const newTopic: any = {
         ...topic,
@@ -289,15 +354,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         ratingCount: 0,
         rankingVotes: {},
         comments: [],
+        demoBreakdown: {},
         aspectVotes: topic.votingType === "aspects"
           ? Object.fromEntries((topic.aspects ?? []).map((a) => [a, { up: 0, down: 0 }]))
           : undefined,
       };
-      if (premiumAccountType) {
-        newTopic.premiumAccountType = premiumAccountType;
-      }
-      const updated = [newTopic, ...topics];
-      saveTopics(updated);
+      if (premiumAccountType) newTopic.premiumAccountType = premiumAccountType;
+      saveTopics([newTopic, ...topics]);
     },
     [topics, userId, clerkUserId, saveTopics]
   );
@@ -307,6 +370,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const prev = userVotes[topicId];
       const wasYes = prev?.yesno === "yes";
       const wasNo = prev?.yesno === "no";
+      const prevDemo = prev?.voterDemo;
 
       const updated = topics.map((t) => {
         if (t.id !== topicId) return t;
@@ -315,50 +379,61 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         if (wasNo) noCount--;
         if (vote === "yes") yesCount++;
         else noCount++;
-        return { ...t, yesCount, noCount };
+
+        let db = t.demoBreakdown ?? {};
+        if (prevDemo) db = applyDemoToBreakdown(db, prevDemo, -1);
+        if (Object.keys(userDemographics).length > 0) db = applyDemoToBreakdown(db, userDemographics, 1);
+
+        return { ...t, yesCount, noCount, demoBreakdown: db };
       });
 
       const newVotes = {
         ...userVotes,
-        [topicId]: { ...prev, topicId, yesno: vote as "yes" | "no" },
+        [topicId]: { ...prev, topicId, yesno: vote as "yes" | "no", voterDemo: userDemographics },
       };
       saveTopics(updated);
       saveVotes(newVotes);
     },
-    [topics, userVotes, saveTopics, saveVotes]
+    [topics, userVotes, userDemographics, saveTopics, saveVotes]
   );
 
   const voteRating = useCallback(
     (topicId: string, rating: number) => {
       const prev = userVotes[topicId];
       const prevRating = prev?.rating;
+      const prevDemo = prev?.voterDemo;
 
       const updated = topics.map((t) => {
         if (t.id !== topicId) return t;
         let { totalRating, ratingCount } = t;
-        if (prevRating !== undefined) {
-          totalRating -= prevRating;
-          ratingCount--;
-        }
+        if (prevRating !== undefined) { totalRating -= prevRating; ratingCount--; }
         totalRating += rating;
         ratingCount++;
-        return { ...t, totalRating, ratingCount };
+
+        let db = t.demoBreakdown ?? {};
+        if (prevDemo && prevRating === undefined) db = applyDemoToBreakdown(db, prevDemo, -1);
+        if (prevRating === undefined && Object.keys(userDemographics).length > 0) {
+          db = applyDemoToBreakdown(db, userDemographics, 1);
+        }
+
+        return { ...t, totalRating, ratingCount, demoBreakdown: db };
       });
 
       const newVotes = {
         ...userVotes,
-        [topicId]: { ...prev, topicId, rating },
+        [topicId]: { ...prev, topicId, rating, voterDemo: userDemographics },
       };
       saveTopics(updated);
       saveVotes(newVotes);
     },
-    [topics, userVotes, saveTopics, saveVotes]
+    [topics, userVotes, userDemographics, saveTopics, saveVotes]
   );
 
   const voteRanking = useCallback(
     (topicId: string, orderedIds: string[]) => {
       const prev = userVotes[topicId];
       const prevRanking = prev?.ranking;
+      const prevDemo = prev?.voterDemo;
 
       const updated = topics.map((t) => {
         if (t.id !== topicId) return t;
@@ -368,36 +443,40 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           prevRanking.forEach((optId, idx) => {
             const rank = idx + 1;
             if (newRankingVotes[optId]) {
-              newRankingVotes[optId] = newRankingVotes[optId].filter(
-                (r) => r !== rank
-              );
+              newRankingVotes[optId] = newRankingVotes[optId].filter((r) => r !== rank);
             }
           });
         }
-
         orderedIds.forEach((optId, idx) => {
           const rank = idx + 1;
           if (!newRankingVotes[optId]) newRankingVotes[optId] = [];
           newRankingVotes[optId] = [...newRankingVotes[optId], rank];
         });
 
-        return { ...t, rankingVotes: newRankingVotes };
+        let db = t.demoBreakdown ?? {};
+        if (prevDemo && !prevRanking) db = applyDemoToBreakdown(db, prevDemo, -1);
+        if (!prevRanking && Object.keys(userDemographics).length > 0) {
+          db = applyDemoToBreakdown(db, userDemographics, 1);
+        }
+
+        return { ...t, rankingVotes: newRankingVotes, demoBreakdown: db };
       });
 
       const newVotes = {
         ...userVotes,
-        [topicId]: { ...prev, topicId, ranking: orderedIds },
+        [topicId]: { ...prev, topicId, ranking: orderedIds, voterDemo: userDemographics },
       };
       saveTopics(updated);
       saveVotes(newVotes);
     },
-    [topics, userVotes, saveTopics, saveVotes]
+    [topics, userVotes, userDemographics, saveTopics, saveVotes]
   );
 
   const voteAspect = useCallback(
     (topicId: string, aspect: string, choice: "up" | "down") => {
       const prev = userVotes[topicId];
       const prevChoice = prev?.aspectChoices?.[aspect];
+      const prevDemo = prev?.voterDemo;
 
       const updated = topics.map((t) => {
         if (t.id !== topicId) return t;
@@ -406,7 +485,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         const next = { ...current };
 
         if (prevChoice === choice) {
-          // Toggle off
           if (choice === "up") next.up = Math.max(0, next.up - 1);
           else next.down = Math.max(0, next.down - 1);
         } else {
@@ -415,28 +493,31 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           if (choice === "up") next.up++;
           else next.down++;
         }
-
         av[aspect] = next;
-        return { ...t, aspectVotes: av };
+
+        const isFirstAspectVote = !prev?.aspectChoices || Object.keys(prev.aspectChoices).length === 0;
+        let db = t.demoBreakdown ?? {};
+        if (isFirstAspectVote && Object.keys(userDemographics).length > 0) {
+          db = applyDemoToBreakdown(db, userDemographics, 1);
+        }
+
+        return { ...t, aspectVotes: av, demoBreakdown: db };
       });
 
       const prevChoices = prev?.aspectChoices ?? {};
       const newChoice = prevChoices[aspect] === choice ? undefined : choice;
       const nextChoices = { ...prevChoices };
-      if (newChoice === undefined) {
-        delete nextChoices[aspect];
-      } else {
-        nextChoices[aspect] = newChoice;
-      }
+      if (newChoice === undefined) delete nextChoices[aspect];
+      else nextChoices[aspect] = newChoice;
 
       const newVotes = {
         ...userVotes,
-        [topicId]: { ...prev, topicId, aspectChoices: nextChoices },
+        [topicId]: { ...prev, topicId, aspectChoices: nextChoices, voterDemo: userDemographics },
       };
       saveTopics(updated);
       saveVotes(newVotes);
     },
-    [topics, userVotes, saveTopics, saveVotes]
+    [topics, userVotes, userDemographics, saveTopics, saveVotes]
   );
 
   const getUserVote = useCallback(
@@ -470,6 +551,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         topics,
         userVotes,
         userId,
+        userDemographics,
         addTopic,
         addComment,
         voteYesNo,
