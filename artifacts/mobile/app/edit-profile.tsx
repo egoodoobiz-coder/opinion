@@ -64,24 +64,42 @@ export default function EditProfileScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setSaving(true);
     try {
-      const existingMeta = (user.unsafeMetadata as any) ?? {};
-      await user.update({
-        firstName: firstName.trim(),
-        lastName: lastName.trim(),
-        unsafeMetadata: {
-          ...existingMeta,
-          demographics: {
-            ageRange: ageRange || undefined,
-            gender: gender || undefined,
-            country: country.trim() || undefined,
-            occupation: occupation || undefined,
+      const nameChanged =
+        firstName.trim() !== (user.firstName ?? "") ||
+        lastName.trim() !== (user.lastName ?? "");
+
+      if (nameChanged) {
+        await user.update({
+          firstName: firstName.trim(),
+          lastName: lastName.trim(),
+        });
+      }
+
+      if (demoChanged) {
+        const existingMeta = (user.unsafeMetadata as any) ?? {};
+        const demographics: Record<string, string | undefined> = {};
+        if (ageRange) demographics.ageRange = ageRange;
+        if (gender) demographics.gender = gender;
+        if (country.trim()) demographics.country = country.trim();
+        if (occupation) demographics.occupation = occupation;
+
+        await (user as any).update({
+          unsafeMetadata: {
+            ...existingMeta,
+            demographics,
           },
-        },
-      });
+        });
+      }
+
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       router.back();
     } catch (err: any) {
-      Alert.alert("Error", err?.errors?.[0]?.message ?? "Could not save changes. Please try again.");
+      const msg =
+        err?.errors?.[0]?.longMessage ??
+        err?.errors?.[0]?.message ??
+        err?.message ??
+        "Could not save changes. Please try again.";
+      Alert.alert("Error", msg);
     } finally {
       setSaving(false);
     }
