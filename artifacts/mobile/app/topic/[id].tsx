@@ -1,5 +1,5 @@
 import { useUser } from "@clerk/expo";
-import { Feather } from "@expo/vector-icons";
+import { Icon } from "@/components/Icon";
 import * as Haptics from "expo-haptics";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useMemo, useRef, useState } from "react";
@@ -90,10 +90,10 @@ export default function TopicDetailScreen() {
           onPress={() => router.back()}
           style={({ pressed }) => [s.backBtn, pressed && { opacity: 0.6 }]}
         >
-          <Feather name="arrow-left" size={20} color={colors.foreground} />
+          <Icon name="arrow-left" size={20} color={colors.foreground} />
         </Pressable>
         <View style={[s.catBadge, { backgroundColor: cat.color + "22" }]}>
-          <Feather name={cat.icon as any} size={12} color={cat.color} />
+          <Icon name={cat.icon as any} size={12} color={cat.color} />
           <Text style={[s.catLabel, { color: cat.color }]}>{cat.label}</Text>
         </View>
       </View>
@@ -115,7 +115,7 @@ export default function TopicDetailScreen() {
         {hasYesNo && (
           <View style={s.section}>
             <View style={s.sectionHeader}>
-              <Feather name="thumbs-up" size={15} color={colors.yes} />
+              <Icon name="thumbs-up" size={15} color={colors.yes} />
               <Text style={s.sectionTitle}>Yes or No</Text>
               {total > 0 && (
                 <Text style={s.voteCount}>{total.toLocaleString()} votes</Text>
@@ -169,7 +169,7 @@ export default function TopicDetailScreen() {
                   voteYesNo(topic.id, "yes");
                 }}
               >
-                <Feather
+                <Icon
                   name="thumbs-up"
                   size={18}
                   color={
@@ -198,7 +198,7 @@ export default function TopicDetailScreen() {
                   voteYesNo(topic.id, "no");
                 }}
               >
-                <Feather
+                <Icon
                   name="thumbs-down"
                   size={18}
                   color={
@@ -223,7 +223,7 @@ export default function TopicDetailScreen() {
         {hasRating && (
           <View style={s.section}>
             <View style={s.sectionHeader}>
-              <Feather name="star" size={15} color={colors.star} />
+              <Icon name="star" size={15} color={colors.star} />
               <Text style={s.sectionTitle}>Star Rating</Text>
               {topic.ratingCount > 0 && (
                 <Text style={s.voteCount}>
@@ -259,7 +259,7 @@ export default function TopicDetailScreen() {
         {hasRanking && topic.rankingOptions && (
           <View style={s.section}>
             <View style={s.sectionHeader}>
-              <Feather name="list" size={15} color={colors.rank} />
+              <Icon name="list" size={15} color={colors.rank} />
               <Text style={s.sectionTitle}>Community Ranking</Text>
             </View>
 
@@ -298,7 +298,7 @@ export default function TopicDetailScreen() {
                   }
                 }}
               >
-                <Feather name="check" size={16} color={colors.primaryForeground} />
+                <Icon name="check" size={16} color={colors.primaryForeground} />
                 <Text style={s.submitRankLabel}>
                   {userVote?.ranking ? "Update Ranking" : "Submit Ranking"}
                 </Text>
@@ -309,7 +309,7 @@ export default function TopicDetailScreen() {
         {hasAspects && topic.aspects && (
           <View style={s.section}>
             <View style={s.sectionHeader}>
-              <Feather name="layers" size={15} color={colors.primary} />
+              <Icon name="layers" size={15} color={colors.primary} />
               <Text style={s.sectionTitle}>Aspect Rating</Text>
               <Text style={s.voteCount}>
                 {topic.aspects.length} criteria
@@ -340,7 +340,7 @@ export default function TopicDetailScreen() {
                             voteAspect(topic.id, aspect, "up");
                           }}
                         >
-                          <Feather
+                          <Icon
                             name="thumbs-up"
                             size={13}
                             color={userChoice === "up" ? "#fff" : colors.yes}
@@ -361,7 +361,7 @@ export default function TopicDetailScreen() {
                             voteAspect(topic.id, aspect, "down");
                           }}
                         >
-                          <Feather
+                          <Icon
                             name="thumbs-down"
                             size={13}
                             color={userChoice === "down" ? "#fff" : colors.no}
@@ -397,7 +397,7 @@ export default function TopicDetailScreen() {
         {/* Comments Section */}
         <View style={s.commentsSection}>
           <View style={s.commentsSectionHeader}>
-            <Feather name="message-circle" size={15} color={colors.mutedForeground} />
+            <Icon name="message-circle" size={15} color={colors.mutedForeground} />
             <Text style={s.commentsSectionTitle}>
               {topic.comments.length === 0
                 ? "No comments yet"
@@ -452,7 +452,7 @@ export default function TopicDetailScreen() {
             { opacity: !commentText.trim() ? 0.4 : pressed ? 0.7 : 1 },
           ]}
         >
-          <Feather name="send" size={18} color={colors.primaryForeground} />
+          <Icon name="send" size={18} color={colors.primaryForeground} />
         </Pressable>
       </View>
     </KeyboardAvoidingView>
@@ -487,10 +487,10 @@ function DemoBreakdownPanel({
         style={s.sectionHeader}
         onPress={() => setExpanded((v) => !v)}
       >
-        <Feather name="bar-chart-2" size={15} color={colors.primary} />
+        <Icon name="bar-chart-2" size={15} color={colors.primary} />
         <Text style={s.sectionTitle}>Who Voted</Text>
         <Text style={s.voteCount}>{fields.length} breakdown{fields.length > 1 ? "s" : ""}</Text>
-        <Feather name={expanded ? "chevron-up" : "chevron-down"} size={14} color={colors.mutedForeground} />
+        <Icon name={expanded ? "chevron-up" : "chevron-down"} size={14} color={colors.mutedForeground} />
       </Pressable>
 
       {expanded && (

@@ -1,5 +1,5 @@
 import { useAuth, useUser } from "@clerk/expo";
-import { Feather } from "@expo/vector-icons";
+import { Icon } from "@/components/Icon";
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
 import React, { useEffect, useMemo, useState } from "react";
@@ -194,7 +194,7 @@ export default function ProfileScreen() {
           <Text style={s.title}>Profile</Text>
         </View>
         <View style={s.signInPrompt}>
-          <Feather name="user" size={56} color={colors.border} />
+          <Icon name="user" size={56} color={colors.border} />
           <Text style={s.signInTitle}>Join Opinion</Text>
           <Text style={s.signInSubtitle}>
             Create an account to vote, post topics, and unlock premium features
@@ -239,7 +239,7 @@ export default function ProfileScreen() {
             }}
             style={({ pressed }) => [s.signOutBtn, pressed && { opacity: 0.6 }]}
           >
-            <Feather name="log-out" size={18} color={colors.mutedForeground} />
+            <Icon name="log-out" size={18} color={colors.mutedForeground} />
           </Pressable>
         </View>
 
@@ -263,7 +263,7 @@ export default function ProfileScreen() {
             </View>
             {isPremium && (
               <View style={s.premiumBadgeOnAvatar}>
-                <Feather name="check" size={10} color="#fff" />
+                <Icon name="check" size={10} color="#fff" />
               </View>
             )}
           </View>
@@ -276,7 +276,7 @@ export default function ProfileScreen() {
               </Text>
               {isPremium && (
                 <View style={[s.badge, accountType === "celebrity" ? s.badgeCelebrity : s.badgeCompany]}>
-                  <Feather name="check-circle" size={11} color="#fff" />
+                  <Icon name="check-circle" size={11} color="#fff" />
                   <Text style={s.badgeText}>
                     {accountType === "celebrity" ? "Celebrity" : "Company"}
                   </Text>
@@ -288,7 +288,7 @@ export default function ProfileScreen() {
             </Text>
           </View>
           <View style={s.editIconWrap}>
-            <Feather name="edit-2" size={14} color={colors.mutedForeground} />
+            <Icon name="edit-2" size={14} color={colors.mutedForeground} />
           </View>
         </Pressable>
 
@@ -319,9 +319,9 @@ export default function ProfileScreen() {
               router.push("/admin");
             }}
           >
-            <Feather name="shield" size={16} color={colors.primary} />
+            <Icon name="shield" size={16} color={colors.primary} />
             <Text style={s.adminBtnText}>Admin Panel</Text>
-            <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
+            <Icon name="chevron-right" size={16} color={colors.mutedForeground} />
           </Pressable>
         )}
 
@@ -329,7 +329,7 @@ export default function ProfileScreen() {
         {!isPremium && (
           <View style={s.premiumCard}>
             <View style={s.premiumHeader}>
-              <Feather name="star" size={18} color={colors.star} />
+              <Icon name="star" size={18} color={colors.star} />
               <Text style={s.premiumTitle}>Get Verified</Text>
             </View>
             <Text style={s.premiumSubtitle}>
@@ -342,7 +342,7 @@ export default function ProfileScreen() {
                 router.push("/verify-request");
               }}
             >
-              <Feather name="check-circle" size={15} color="#fff" />
+              <Icon name="check-circle" size={15} color="#fff" />
               <Text style={s.upgradeBtnText}>Apply for Verification</Text>
             </Pressable>
           </View>
@@ -352,7 +352,7 @@ export default function ProfileScreen() {
         {isPremium && analyticsData && (
           <View style={s.analyticsCard}>
             <View style={s.analyticsHeader}>
-              <Feather name="bar-chart-2" size={16} color={colors.primary} />
+              <Icon name="bar-chart-2" size={16} color={colors.primary} />
               <Text style={s.analyticsTitle}>Analytics</Text>
             </View>
 
@@ -423,7 +423,7 @@ export default function ProfileScreen() {
           />
           <View style={s.modalCard}>
             <View style={s.modalHeader}>
-              <Feather name="shield" size={20} color={colors.primary} />
+              <Icon name="shield" size={20} color={colors.primary} />
               <Text style={s.modalTitle}>Admin Access</Text>
             </View>
             <Text style={s.modalSubtitle}>

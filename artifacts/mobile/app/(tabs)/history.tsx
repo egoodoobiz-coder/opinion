@@ -1,5 +1,5 @@
 import { useAuth, useUser } from "@clerk/expo";
-import { Feather } from "@expo/vector-icons";
+import { Icon } from "@/components/Icon";
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
@@ -47,7 +47,7 @@ export default function HistoryScreen() {
           <Text style={s.title}>History</Text>
         </View>
         <View style={s.signInPrompt}>
-          <Feather name="clock" size={56} color={colors.border} />
+          <Icon name="clock" size={56} color={colors.border} />
           <Text style={s.signInTitle}>Sign in to see your history</Text>
           <Text style={s.signInSubtitle}>
             Your posts and votes will appear here once you have an account
@@ -137,7 +137,7 @@ export default function HistoryScreen() {
         ]}
         ListEmptyComponent={
           <View style={s.emptyState}>
-            <Feather name={empty.icon} size={52} color={colors.border} />
+            <Icon name={empty.icon} size={52} color={colors.border} />
             <Text style={s.emptyTitle}>{empty.title}</Text>
             <Text style={s.emptySubtitle}>{empty.subtitle}</Text>
             <Pressable

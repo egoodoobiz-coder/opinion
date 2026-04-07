@@ -1,4 +1,4 @@
-import { Feather } from "@expo/vector-icons";
+import { Icon } from "@/components/Icon";
 import * as Haptics from "expo-haptics";
 import React, { useState } from "react";
 import {
@@ -85,7 +85,7 @@ export default function RankingVote({
                   ]}
                   disabled={idx === 0}
                 >
-                  <Feather
+                  <Icon
                     name="chevron-up"
                     size={16}
                     color={idx === 0 ? colors.border : colors.primary}
@@ -101,7 +101,7 @@ export default function RankingVote({
                   ]}
                   disabled={idx === displayOptions.length - 1}
                 >
-                  <Feather
+                  <Icon
                     name="chevron-down"
                     size={16}
                     color={

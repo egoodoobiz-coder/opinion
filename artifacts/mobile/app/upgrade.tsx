@@ -1,6 +1,6 @@
 import { useUser } from "@clerk/expo";
-import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import { Icon } from "@/components/Icon";
 import * as Linking from "expo-linking";
 import { useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
@@ -26,7 +26,7 @@ type Plan = {
   price: string;
   priceNote: string;
   accountType: "company" | "celebrity";
-  icon: keyof typeof Feather.glyphMap;
+  icon: string;
   color: string;
   features: string[];
 };
@@ -230,7 +230,7 @@ export default function UpgradeScreen() {
           style={({ pressed }) => [s.closeBtn, pressed && { opacity: 0.6 }]}
           onPress={() => router.back()}
         >
-          <Feather name="x" size={20} color={colors.mutedForeground} />
+          <Icon name="x" size={20} color={colors.mutedForeground} />
         </Pressable>
         <Text style={s.headerTitle}>Go Premium</Text>
         <View style={s.closeBtn} />
@@ -243,7 +243,7 @@ export default function UpgradeScreen() {
         {/* Hero */}
         <View style={s.hero}>
           <View style={s.heroIcon}>
-            <Feather name="star" size={28} color={colors.star} />
+            <Icon name="star" size={28} color={colors.star} />
           </View>
           <Text style={s.heroTitle}>Amplify your voice</Text>
           <Text style={s.heroSubtitle}>
@@ -266,7 +266,7 @@ export default function UpgradeScreen() {
           >
             <View style={[s.planHeader, { backgroundColor: plan.color + "22" }]}>
               <View style={[s.planIconWrap, { backgroundColor: plan.color + "33" }]}>
-                <Feather name={plan.icon} size={20} color={plan.color} />
+                <Icon name={plan.icon} size={20} color={plan.color} />
               </View>
               <View style={s.planNameWrap}>
                 <Text style={[s.planName, { color: plan.color }]}>{plan.name}</Text>
@@ -281,7 +281,7 @@ export default function UpgradeScreen() {
             <View style={s.planFeatures}>
               {plan.features.map((feature, i) => (
                 <View key={i} style={s.featureRow}>
-                  <Feather name="check" size={14} color={plan.color} />
+                  <Icon name="check" size={14} color={plan.color} />
                   <Text style={s.featureText}>{feature}</Text>
                 </View>
               ))}
@@ -292,7 +292,7 @@ export default function UpgradeScreen() {
                 <ActivityIndicator color="#fff" />
               ) : (
                 <>
-                  <Feather name={plan.icon} size={16} color="#fff" />
+                  <Icon name={plan.icon} size={16} color="#fff" />
                   <Text style={s.subscribeBtnText}>Subscribe as {plan.name}</Text>
                 </>
               )}
@@ -303,7 +303,7 @@ export default function UpgradeScreen() {
         {/* After checkout — verify payment */}
         {pendingPlan && !loading && (
           <View style={s.verifyCard}>
-            <Feather name="info" size={16} color={colors.primary} />
+            <Icon name="info" size={16} color={colors.primary} />
             <View style={s.verifyContent}>
               <Text style={s.verifyTitle}>Completed checkout?</Text>
               <Text style={s.verifyDesc}>

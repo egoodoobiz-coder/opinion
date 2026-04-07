@@ -1,5 +1,5 @@
 import { useAuth } from "@clerk/expo";
-import { Feather } from "@expo/vector-icons";
+import { Icon } from "@/components/Icon";
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
@@ -115,7 +115,7 @@ export default function AdminScreen() {
           style={({ pressed }) => [s.iconBtn, pressed && { opacity: 0.6 }]}
           onPress={() => router.back()}
         >
-          <Feather name="x" size={20} color={colors.mutedForeground} />
+          <Icon name="x" size={20} color={colors.mutedForeground} />
         </Pressable>
         <View style={s.headerCenter}>
           <Text style={s.headerTitle}>Admin Panel</Text>
@@ -129,7 +129,7 @@ export default function AdminScreen() {
           style={({ pressed }) => [s.iconBtn, pressed && { opacity: 0.6 }]}
           onPress={() => { setRefreshing(true); fetchRequests(); }}
         >
-          <Feather name="refresh-cw" size={18} color={colors.mutedForeground} />
+          <Icon name="refresh-cw" size={18} color={colors.mutedForeground} />
         </Pressable>
       </View>
 
@@ -167,7 +167,7 @@ export default function AdminScreen() {
         >
           {filtered.length === 0 ? (
             <View style={s.empty}>
-              <Feather name="inbox" size={40} color={colors.border} />
+              <Icon name="inbox" size={40} color={colors.border} />
               <Text style={s.emptyText}>No {filter === "all" ? "" : filter} requests</Text>
             </View>
           ) : (
@@ -191,7 +191,7 @@ export default function AdminScreen() {
                     s.typePill,
                     req.requestedAccountType === "celebrity" ? s.typeCeleb : s.typeCompany,
                   ]}>
-                    <Feather
+                    <Icon
                       name={req.requestedAccountType === "celebrity" ? "star" : "briefcase"}
                       size={11}
                       color={req.requestedAccountType === "celebrity" ? colors.star : colors.primary}
@@ -229,7 +229,7 @@ export default function AdminScreen() {
                           <ActivityIndicator size="small" color={colors.no} />
                         ) : (
                           <>
-                            <Feather name="x" size={14} color={colors.no} />
+                            <Icon name="x" size={14} color={colors.no} />
                             <Text style={s.rejectBtnText}>Reject</Text>
                           </>
                         )}
@@ -243,7 +243,7 @@ export default function AdminScreen() {
                           <ActivityIndicator size="small" color="#fff" />
                         ) : (
                           <>
-                            <Feather name="check" size={14} color="#fff" />
+                            <Icon name="check" size={14} color="#fff" />
                             <Text style={s.approveBtnText}>Approve</Text>
                           </>
                         )}
@@ -254,7 +254,7 @@ export default function AdminScreen() {
                       s.statusChip,
                       req.status === "approved" ? s.statusApproved : s.statusRejected,
                     ]}>
-                      <Feather
+                      <Icon
                         name={req.status === "approved" ? "check-circle" : "x-circle"}
                         size={12}
                         color={req.status === "approved" ? colors.yes : colors.no}

@@ -1,5 +1,5 @@
 import { useUser } from "@clerk/expo";
-import { Feather } from "@expo/vector-icons";
+import { Icon } from "@/components/Icon";
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
@@ -134,7 +134,7 @@ export default function EditProfileScreen() {
           style={({ pressed }) => [s.iconBtn, pressed && { opacity: 0.6 }]}
           onPress={() => router.back()}
         >
-          <Feather name="x" size={20} color={colors.mutedForeground} />
+          <Icon name="x" size={20} color={colors.mutedForeground} />
         </Pressable>
         <Text style={s.headerTitle}>Edit Profile</Text>
         <Pressable
@@ -167,13 +167,13 @@ export default function EditProfileScreen() {
             </View>
             {isPremium && (
               <View style={[s.premiumRing, accountType === "celebrity" ? s.ringCelebrity : s.ringCompany]}>
-                <Feather name="check" size={10} color="#fff" />
+                <Icon name="check" size={10} color="#fff" />
               </View>
             )}
           </View>
           {isPremium && (
             <View style={[s.accountBadge, accountType === "celebrity" ? s.badgeCelebrity : s.badgeCompany]}>
-              <Feather name="check-circle" size={12} color="#fff" />
+              <Icon name="check-circle" size={12} color="#fff" />
               <Text style={s.accountBadgeText}>
                 {accountType === "celebrity" ? "Verified Celebrity" : "Verified Company"}
               </Text>
@@ -217,7 +217,7 @@ export default function EditProfileScreen() {
         {/* Demographics */}
         <View style={s.section}>
           <View style={s.sectionLabelRow}>
-            <Feather name="bar-chart-2" size={13} color={colors.mutedForeground} />
+            <Icon name="bar-chart-2" size={13} color={colors.mutedForeground} />
             <Text style={s.sectionLabel}>Demographics</Text>
           </View>
           <Text style={s.sectionHint}>
@@ -265,21 +265,21 @@ export default function EditProfileScreen() {
           <View style={s.card}>
             <View style={s.detailRow}>
               <View style={s.detailIconWrap}>
-                <Feather name="mail" size={15} color={colors.mutedForeground} />
+                <Icon name="mail" size={15} color={colors.mutedForeground} />
               </View>
               <View style={s.detailContent}>
                 <Text style={s.detailLabel}>Email</Text>
                 <Text style={s.detailValue} numberOfLines={1}>{email}</Text>
               </View>
               <View style={s.verifiedChip}>
-                <Feather name="check" size={10} color={colors.primary} />
+                <Icon name="check" size={10} color={colors.primary} />
                 <Text style={s.verifiedText}>Verified</Text>
               </View>
             </View>
             <View style={s.divider} />
             <View style={s.detailRow}>
               <View style={s.detailIconWrap}>
-                <Feather name="shield" size={15} color={colors.mutedForeground} />
+                <Icon name="shield" size={15} color={colors.mutedForeground} />
               </View>
               <View style={s.detailContent}>
                 <Text style={s.detailLabel}>Account type</Text>
@@ -293,7 +293,7 @@ export default function EditProfileScreen() {
             <View style={s.divider} />
             <View style={s.detailRow}>
               <View style={s.detailIconWrap}>
-                <Feather name="calendar" size={15} color={colors.mutedForeground} />
+                <Icon name="calendar" size={15} color={colors.mutedForeground} />
               </View>
               <View style={s.detailContent}>
                 <Text style={s.detailLabel}>Member since</Text>
@@ -313,7 +313,7 @@ export default function EditProfileScreen() {
                   {i > 0 && <View style={s.divider} />}
                   <View style={s.detailRow}>
                     <View style={s.detailIconWrap}>
-                      <Feather name="link" size={15} color={colors.mutedForeground} />
+                      <Icon name="link" size={15} color={colors.mutedForeground} />
                     </View>
                     <View style={s.detailContent}>
                       <Text style={s.detailLabel}>
@@ -324,7 +324,7 @@ export default function EditProfileScreen() {
                       </Text>
                     </View>
                     <View style={s.verifiedChip}>
-                      <Feather name="check" size={10} color={colors.primary} />
+                      <Icon name="check" size={10} color={colors.primary} />
                       <Text style={s.verifiedText}>Linked</Text>
                     </View>
                   </View>

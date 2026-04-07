@@ -1,4 +1,4 @@
-import { Feather } from "@expo/vector-icons";
+import { Icon } from "@/components/Icon";
 import * as Haptics from "expo-haptics";
 import React from "react";
 import { Pressable, StyleSheet, View } from "react-native";
@@ -33,7 +33,7 @@ export default function StarRating({
           }}
           style={({ pressed }) => [pressed && { opacity: 0.6 }]}
         >
-          <Feather
+          <Icon
             name={star <= value ? "star" : "star"}
             size={size}
             color={star <= value ? colors.star : colors.border}

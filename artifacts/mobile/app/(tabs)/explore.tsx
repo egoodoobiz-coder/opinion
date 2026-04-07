@@ -1,4 +1,4 @@
-import { Feather } from "@expo/vector-icons";
+import { Icon } from "@/components/Icon";
 import { useRouter } from "expo-router";
 import React, { useMemo, useState } from "react";
 import {
@@ -62,7 +62,7 @@ export default function ExploreScreen() {
       >
         <Text style={s.title}>Explore</Text>
         <View style={[s.searchRow, isHashtagSearch && s.searchRowHashtag]}>
-          <Feather
+          <Icon
             name={isHashtagSearch ? "hash" : "search"}
             size={16}
             color={isHashtagSearch ? colors.primary : colors.mutedForeground}
@@ -77,13 +77,13 @@ export default function ExploreScreen() {
           />
           {!!query && (
             <Pressable onPress={() => setQuery("")}>
-              <Feather name="x" size={16} color={colors.mutedForeground} />
+              <Icon name="x" size={16} color={colors.mutedForeground} />
             </Pressable>
           )}
         </View>
         {isHashtagSearch && (
           <View style={s.hashtagBanner}>
-            <Feather name="hash" size={12} color={colors.primary} />
+            <Icon name="hash" size={12} color={colors.primary} />
             <Text style={s.hashtagBannerText}>
               Showing posts tagged <Text style={{ fontWeight: "700" }}>#{hashtagQuery}</Text>
             </Text>
@@ -106,7 +106,7 @@ export default function ExploreScreen() {
               ]}
               onPress={() => setActiveCategory(active ? null : cat)}
             >
-              <Feather name={cfg.icon as any} size={18} color={cfg.color} />
+              <Icon name={cfg.icon as any} size={18} color={cfg.color} />
               <Text style={[s.catName, active && { color: cfg.color }]}>
                 {cfg.label}
               </Text>
@@ -133,7 +133,7 @@ export default function ExploreScreen() {
           scrollEnabled={!!results.length}
           ListEmptyComponent={
             <View style={s.empty}>
-              <Feather name="search" size={36} color={colors.border} />
+              <Icon name="search" size={36} color={colors.border} />
               <Text style={s.emptyText}>No results found</Text>
             </View>
           }

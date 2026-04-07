@@ -1,5 +1,5 @@
 import { useAuth, useUser } from "@clerk/expo";
-import { Feather } from "@expo/vector-icons";
+import { Icon } from "@/components/Icon";
 import * as Haptics from "expo-haptics";
 import { type Href, useRouter } from "expo-router";
 import React, { useRef, useState } from "react";
@@ -166,7 +166,7 @@ export default function CreateScreen() {
           onPress={() => router.back()}
           style={({ pressed }) => [s.backBtn, pressed && { opacity: 0.6 }]}
         >
-          <Feather name="x" size={22} color={colors.foreground} />
+          <Icon name="x" size={22} color={colors.foreground} />
         </Pressable>
         <Text style={s.headerTitle}>New Topic</Text>
         <Pressable
@@ -258,7 +258,7 @@ export default function CreateScreen() {
                     setCategory(cat);
                   }}
                 >
-                  <Feather
+                  <Icon
                     name={cfg.icon as any}
                     size={13}
                     color={active ? cfg.color : colors.mutedForeground}
@@ -303,7 +303,7 @@ export default function CreateScreen() {
                   ]}
                   onPress={() => selectVotingType(vt)}
                 >
-                  <Feather
+                  <Icon
                     name={icon as any}
                     size={20}
                     color={active ? colors.primary : colors.mutedForeground}
@@ -337,7 +337,7 @@ export default function CreateScreen() {
               {aspectItems.map((item, idx) => (
                 <View key={idx} style={s.rankOptionRow}>
                   <View style={[s.rankBadge, { backgroundColor: colors.primary + "22" }]}>
-                    <Feather name="layers" size={13} color={colors.primary} />
+                    <Icon name="layers" size={13} color={colors.primary} />
                   </View>
                   <ThemedInput
                     ref={(ref) => { aspectRefs.current[idx] = ref; }}
@@ -362,7 +362,7 @@ export default function CreateScreen() {
                       hitSlop={8}
                       style={({ pressed }) => [s.removeBtn, pressed && { opacity: 0.5 }]}
                     >
-                      <Feather name="x" size={16} color={colors.mutedForeground} />
+                      <Icon name="x" size={16} color={colors.mutedForeground} />
                     </Pressable>
                   )}
                 </View>
@@ -372,7 +372,7 @@ export default function CreateScreen() {
                   style={({ pressed }) => [s.addOptionBtn, pressed && { opacity: 0.7 }]}
                   onPress={addAspectItem}
                 >
-                  <Feather name="plus-circle" size={16} color={colors.primary} />
+                  <Icon name="plus-circle" size={16} color={colors.primary} />
                   <Text style={s.addOptionText}>Add another aspect</Text>
                   <Text style={s.addOptionCount}>{aspectItems.length}/10</Text>
                 </Pressable>
@@ -391,7 +391,7 @@ export default function CreateScreen() {
             }}
           >
             <View style={s.targetingHeaderLeft}>
-              <Feather name="users" size={15} color={targetingCount > 0 ? colors.primary : colors.mutedForeground} />
+              <Icon name="users" size={15} color={targetingCount > 0 ? colors.primary : colors.mutedForeground} />
               <Text style={[s.targetingTitle, targetingCount > 0 && { color: colors.primary }]}>
                 Target Audience
               </Text>
@@ -401,7 +401,7 @@ export default function CreateScreen() {
                 </View>
               )}
             </View>
-            <Feather
+            <Icon
               name={showTargeting ? "chevron-up" : "chevron-down"}
               size={16}
               color={colors.mutedForeground}
@@ -519,7 +519,7 @@ export default function CreateScreen() {
                         pressed && { opacity: 0.5 },
                       ]}
                     >
-                      <Feather
+                      <Icon
                         name="x"
                         size={16}
                         color={colors.mutedForeground}
@@ -537,7 +537,7 @@ export default function CreateScreen() {
                   ]}
                   onPress={addRankOption}
                 >
-                  <Feather
+                  <Icon
                     name="plus-circle"
                     size={16}
                     color={colors.primary}

@@ -1,5 +1,5 @@
 import { useUser } from "@clerk/expo";
-import { Feather } from "@expo/vector-icons";
+import { Icon } from "@/components/Icon";
 import { useRouter } from "expo-router";
 import React from "react";
 import {
@@ -75,12 +75,12 @@ export default function TopicCard({ topic, userVoted }: Props) {
       <View style={s.header}>
         <View style={s.headerLeft}>
           <View style={[s.catBadge, { backgroundColor: cat.color + "22" }]}>
-            <Feather name={cat.icon as any} size={12} color={cat.color} />
+            <Icon name={cat.icon as any} size={12} color={cat.color} />
             <Text style={[s.catLabel, { color: cat.color }]}>{cat.label}</Text>
           </View>
           {isPremiumTopic && (
             <View style={[s.verifiedBadge, premiumType === "celebrity" ? s.verifiedCelebrity : s.verifiedCompany]}>
-              <Feather name="check-circle" size={10} color="#fff" />
+              <Icon name="check-circle" size={10} color="#fff" />
               <Text style={s.verifiedText}>
                 {premiumType === "celebrity" ? "Celebrity" : "Company"}
               </Text>
@@ -88,7 +88,7 @@ export default function TopicCard({ topic, userVoted }: Props) {
           )}
           {isTargetedAtMe && (
             <View style={s.forYouBadge}>
-              <Feather name="user-check" size={9} color="#10b981" />
+              <Icon name="user-check" size={9} color="#10b981" />
               <Text style={s.forYouText}>For You</Text>
             </View>
           )}
@@ -96,7 +96,7 @@ export default function TopicCard({ topic, userVoted }: Props) {
         <View style={s.headerRight}>
           {userVoted && (
             <View style={s.votedBadge}>
-              <Feather name="check" size={10} color={colors.primary} />
+              <Icon name="check" size={10} color={colors.primary} />
               <Text style={s.votedLabel}>Voted</Text>
             </View>
           )}
@@ -133,7 +133,7 @@ export default function TopicCard({ topic, userVoted }: Props) {
 
         {hasRating && avg !== null && (
           <View style={s.ratingRow}>
-            <Feather name="star" size={13} color={colors.star} />
+            <Icon name="star" size={13} color={colors.star} />
             <Text style={s.ratingText}>{avg}</Text>
             <Text style={s.ratingCount}>({topic.ratingCount.toLocaleString()})</Text>
           </View>
@@ -180,7 +180,7 @@ export default function TopicCard({ topic, userVoted }: Props) {
 
       <View style={s.voteTypePills}>
         <View style={[s.pill, { backgroundColor: colors.muted }]}>
-          <Feather
+          <Icon
             name={
               topic.votingType === "yesno" ? "thumbs-up"
               : topic.votingType === "rating" ? "star"
@@ -198,7 +198,7 @@ export default function TopicCard({ topic, userVoted }: Props) {
           </Text>
         </View>
         <View style={[s.pill, { backgroundColor: colors.muted }]}>
-          <Feather name="message-circle" size={10} color={colors.mutedForeground} />
+          <Icon name="message-circle" size={10} color={colors.mutedForeground} />
           <Text style={s.pillLabel}>{topic.comments.length}</Text>
         </View>
       </View>

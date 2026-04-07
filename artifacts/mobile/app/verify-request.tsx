@@ -1,5 +1,5 @@
 import { useUser, useAuth } from "@clerk/expo";
-import { Feather } from "@expo/vector-icons";
+import { Icon } from "@/components/Icon";
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
@@ -105,7 +105,7 @@ export default function VerifyRequestScreen() {
           style={({ pressed }) => [s.iconBtn, pressed && { opacity: 0.6 }]}
           onPress={() => router.back()}
         >
-          <Feather name="x" size={20} color={colors.mutedForeground} />
+          <Icon name="x" size={20} color={colors.mutedForeground} />
         </Pressable>
         <Text style={s.headerTitle}>Apply for Verification</Text>
         <View style={{ width: 36 }} />
@@ -124,7 +124,7 @@ export default function VerifyRequestScreen() {
               existingRequest.status === "rejected" && s.statusRejected,
               existingRequest.status === "pending" && s.statusPending,
             ]}>
-              <Feather
+              <Icon
                 name={
                   existingRequest.status === "approved"
                     ? "check-circle"
@@ -190,7 +190,7 @@ export default function VerifyRequestScreen() {
                 style={[s.typeCard, accountType === "company" && s.typeCardActive]}
                 onPress={() => setAccountType("company")}
               >
-                <Feather
+                <Icon
                   name="briefcase"
                   size={22}
                   color={accountType === "company" ? colors.primary : colors.mutedForeground}
@@ -204,7 +204,7 @@ export default function VerifyRequestScreen() {
                 style={[s.typeCard, accountType === "celebrity" && s.typeCardActive]}
                 onPress={() => setAccountType("celebrity")}
               >
-                <Feather
+                <Icon
                   name="star"
                   size={22}
                   color={accountType === "celebrity" ? colors.star : colors.mutedForeground}
@@ -237,7 +237,7 @@ export default function VerifyRequestScreen() {
           <View style={s.section}>
             <Text style={s.sectionLabel}>Submitting as</Text>
             <View style={s.accountInfo}>
-              <Feather name="mail" size={15} color={colors.mutedForeground} />
+              <Icon name="mail" size={15} color={colors.mutedForeground} />
               <Text style={s.accountEmail} numberOfLines={1}>
                 {user?.emailAddresses?.[0]?.emailAddress}
               </Text>
@@ -253,7 +253,7 @@ export default function VerifyRequestScreen() {
               <ActivityIndicator color="#fff" />
             ) : (
               <>
-                <Feather name="send" size={16} color="#fff" />
+                <Icon name="send" size={16} color="#fff" />
                 <Text style={s.submitBtnText}>Submit Request</Text>
               </>
             )}

@@ -1,4 +1,4 @@
-import { Feather } from "@expo/vector-icons";
+import { Icon } from "@/components/Icon";
 import { useRouter } from "expo-router";
 import React, { useMemo, useState } from "react";
 import {
@@ -102,7 +102,7 @@ export default function FeedScreen() {
             style={[s.filterBtn, s.filterBtnForMe, activeFilter === "forme" && s.filterBtnForMeActive]}
             onPress={() => setActiveFilter(activeFilter === "forme" ? "new" : "forme")}
           >
-            <Feather
+            <Icon
               name="user"
               size={11}
               color={activeFilter === "forme" ? "#fff" : colors.mutedForeground}
@@ -146,7 +146,7 @@ export default function FeedScreen() {
                 ]}
                 onPress={() => setActiveCategory(cat)}
               >
-                <Feather
+                <Icon
                   name={cfg.icon as any}
                   size={12}
                   color={
@@ -184,7 +184,7 @@ export default function FeedScreen() {
         scrollEnabled={!!filtered.length}
         ListEmptyComponent={
           <View style={s.empty}>
-            <Feather name="inbox" size={48} color={colors.border} />
+            <Icon name="inbox" size={48} color={colors.border} />
             <Text style={s.emptyText}>No topics yet</Text>
             <Text style={s.emptySubtext}>Be the first to share an opinion</Text>
           </View>
@@ -195,7 +195,7 @@ export default function FeedScreen() {
         style={({ pressed }) => [s.fab, pressed && { opacity: 0.85, transform: [{ scale: 0.95 }] }]}
         onPress={() => router.push("/create")}
       >
-        <Feather name="plus" size={26} color="#fff" />
+        <Icon name="plus" size={26} color="#fff" />
       </Pressable>
     </View>
   );
