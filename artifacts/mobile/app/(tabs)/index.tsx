@@ -75,7 +75,7 @@ export default function FeedScreen() {
       <View
         style={[
           s.header,
-          { paddingTop: Platform.OS === "web" ? 16 : insets.top + 12 },
+          { paddingTop: Platform.OS === "web" ? 16 : insets.top + 4 },
         ]}
       >
         <View style={s.headerTop}>
@@ -181,7 +181,7 @@ export default function FeedScreen() {
         keyExtractor={(t) => t.id}
         contentContainerStyle={[
           s.list,
-          { paddingBottom: Platform.OS === "web" ? 70 : insets.bottom + 80 },
+          { paddingBottom: Platform.OS === "web" ? 68 : insets.bottom + 56 },
         ]}
         renderItem={({ item }) => (
           <TopicCard topic={item} userVoted={!!userVotes[item.id]} />

@@ -83,7 +83,7 @@ export default function TopicDetailScreen() {
       <View
         style={[
           s.header,
-          { paddingTop: Platform.OS === "web" ? 16 : insets.top + 12 },
+          { paddingTop: Platform.OS === "web" ? 16 : insets.top + 4 },
         ]}
       >
         <Pressable

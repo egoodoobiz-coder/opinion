@@ -152,7 +152,7 @@ export default function CreateScreen() {
       <View
         style={[
           s.header,
-          { paddingTop: Platform.OS === "web" ? 16 : insets.top + 12 },
+          { paddingTop: Platform.OS === "web" ? 16 : insets.top + 8 },
         ]}
       >
         <Pressable

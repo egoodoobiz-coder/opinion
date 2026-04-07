@@ -43,7 +43,7 @@ export default function HistoryScreen() {
   if (!isSignedIn) {
     return (
       <View style={[s.container, s.center]}>
-        <View style={[s.header, { paddingTop: Platform.OS === "web" ? 16 : insets.top + 12 }]}>
+        <View style={[s.header, { paddingTop: Platform.OS === "web" ? 16 : insets.top + 4 }]}>
           <Text style={s.title}>History</Text>
         </View>
         <View style={s.signInPrompt}>
@@ -87,7 +87,7 @@ export default function HistoryScreen() {
   return (
     <View style={s.container}>
       {/* Header */}
-      <View style={[s.header, { paddingTop: Platform.OS === "web" ? 16 : insets.top + 12 }]}>
+      <View style={[s.header, { paddingTop: Platform.OS === "web" ? 16 : insets.top + 4 }]}>
         <Text style={s.title}>History</Text>
       </View>
 
@@ -226,7 +226,7 @@ const styles = (colors: ReturnType<typeof useColors>, insets: any) =>
 
     listContent: {
       paddingTop: 8,
-      paddingBottom: Platform.OS === "web" ? 70 : insets.bottom + 80,
+      paddingBottom: Platform.OS === "web" ? 68 : insets.bottom + 56,
     },
     listContentEmpty: {
       flex: 1,

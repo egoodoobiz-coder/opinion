@@ -180,7 +180,7 @@ export default function ProfileScreen() {
   if (!isSignedIn) {
     return (
       <View style={[s.container, s.center]}>
-        <View style={[s.header, { paddingTop: Platform.OS === "web" ? 16 : insets.top + 12 }]}>
+        <View style={[s.header, { paddingTop: Platform.OS === "web" ? 16 : insets.top + 4 }]}>
           <Text style={s.title}>Profile</Text>
         </View>
         <View style={s.signInPrompt}>
@@ -211,14 +211,14 @@ export default function ProfileScreen() {
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[
-          { paddingBottom: Platform.OS === "web" ? 70 : insets.bottom + 80 },
+          { paddingBottom: Platform.OS === "web" ? 68 : insets.bottom + 56 },
         ]}
       >
         {/* Header */}
         <View
           style={[
             s.header,
-            { paddingTop: Platform.OS === "web" ? 16 : insets.top + 12 },
+            { paddingTop: Platform.OS === "web" ? 16 : insets.top + 4 },
           ]}
         >
           <Text style={s.title}>Profile</Text>
