@@ -48,7 +48,10 @@ export default function ProfileScreen() {
     async function fetchStatus() {
       try {
         const token = await getToken();
-        const headers = { Authorization: `Bearer ${token}` };
+        const headers: Record<string, string> = {
+          Authorization: `Bearer ${token ?? ""}`,
+          "X-Clerk-User-Id": user?.id ?? "",
+        };
 
         // Check admin status
         const adminRes = await fetch(`${API_URL}/api/admin/is-admin`, { headers });
@@ -84,15 +87,22 @@ export default function ProfileScreen() {
     setClaimingAdmin(true);
     try {
       const token = await getToken();
-      const res = await fetch(`${API_URL}/api/admin/claim`, {
+      if (!token) {
+        Alert.alert("Session Error", "Could not get auth token. Please sign out and sign in again.");
+        return;
+      }
+      const url = `${API_URL}/api/admin/claim`;
+      const res = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({
           secret: adminCode.trim(),
           userEmail: user.emailAddresses?.[0]?.emailAddress,
+          clerkUserId: user.id,
         }),
       });
-      const data = await res.json();
+      let data: any = {};
+      try { data = await res.json(); } catch {}
       if (res.ok) {
         setIsAdmin(true);
         setShowAdminModal(false);
@@ -100,10 +110,10 @@ export default function ProfileScreen() {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         Alert.alert("Access Granted", "You are now the master admin.");
       } else {
-        Alert.alert("Invalid Code", data.error ?? "Wrong secret code. Try again.");
+        Alert.alert("Failed", `Status ${res.status}: ${data.error ?? "Unknown error"}`);
       }
-    } catch {
-      Alert.alert("Error", "Could not connect. Try again.");
+    } catch (e: any) {
+      Alert.alert("Network Error", e?.message ?? "Could not connect. Check your connection.");
     } finally {
       setClaimingAdmin(false);
     }

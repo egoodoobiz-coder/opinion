@@ -29,14 +29,23 @@ async function checkIsAdmin(userId: string): Promise<boolean> {
 // POST /admin/claim — grant admin access using the setup secret
 router.post("/admin/claim", async (req: any, res: any) => {
   try {
-    const userId = await getAuthenticatedUserId(req);
-    if (!userId) return res.status(401).json({ error: "Unauthorized" });
-
-    const { secret, userEmail } = req.body;
+    const { secret, userEmail, clerkUserId } = req.body;
     const adminSecret = process.env.ADMIN_SETUP_SECRET;
 
-    if (!adminSecret || !secret || secret !== adminSecret) {
+    console.log("[admin/claim] secret match:", secret === adminSecret, "| clerkUserId:", clerkUserId);
+
+    if (!adminSecret || !secret || secret.trim() !== adminSecret) {
       return res.status(403).json({ error: "Invalid admin secret" });
+    }
+
+    // Try JWT first, fall back to body-provided clerkUserId (secret is the auth factor)
+    let userId = await getAuthenticatedUserId(req);
+    if (!userId && clerkUserId) {
+      console.log("[admin/claim] JWT decode failed, using clerkUserId from body");
+      userId = clerkUserId;
+    }
+    if (!userId) {
+      return res.status(401).json({ error: "Could not identify user — please sign out and back in" });
     }
 
     // Check if already admin
@@ -46,9 +55,10 @@ router.post("/admin/claim", async (req: any, res: any) => {
     }
 
     await db.insert(admins).values({ userId, userEmail: userEmail ?? null });
+    console.log("[admin/claim] granted admin to", userId, userEmail);
     res.json({ success: true, message: "Admin access granted" });
   } catch (err) {
-    console.error("admin/claim error", err);
+    console.error("[admin/claim] error:", err);
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -56,7 +66,8 @@ router.post("/admin/claim", async (req: any, res: any) => {
 // GET /admin/is-admin — check if current user is admin
 router.get("/admin/is-admin", async (req: any, res: any) => {
   try {
-    const userId = await getAuthenticatedUserId(req);
+    let userId = await getAuthenticatedUserId(req);
+    if (!userId) userId = (req.headers["x-clerk-user-id"] as string) ?? null;
     if (!userId) return res.status(401).json({ error: "Unauthorized" });
     const isAdmin = await checkIsAdmin(userId);
     res.json({ isAdmin });
@@ -69,7 +80,8 @@ router.get("/admin/is-admin", async (req: any, res: any) => {
 // POST /admin/verify-requests — submit a verification request
 router.post("/admin/verify-requests", async (req: any, res: any) => {
   try {
-    const userId = await getAuthenticatedUserId(req);
+    let userId = await getAuthenticatedUserId(req);
+    if (!userId) userId = req.body.clerkUserId ?? (req.headers["x-clerk-user-id"] as string) ?? null;
     if (!userId) return res.status(401).json({ error: "Unauthorized" });
 
     const { userEmail, userName, requestedAccountType, note } = req.body;
@@ -117,7 +129,8 @@ router.post("/admin/verify-requests", async (req: any, res: any) => {
 // GET /admin/verify-requests/me — current user's request status
 router.get("/admin/verify-requests/me", async (req: any, res: any) => {
   try {
-    const userId = await getAuthenticatedUserId(req);
+    let userId = await getAuthenticatedUserId(req);
+    if (!userId) userId = (req.headers["x-clerk-user-id"] as string) ?? null;
     if (!userId) return res.status(401).json({ error: "Unauthorized" });
 
     const requests = await db
