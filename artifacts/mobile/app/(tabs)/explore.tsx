@@ -24,21 +24,31 @@ export default function ExploreScreen() {
   const [query, setQuery] = useState("");
   const [activeCategory, setActiveCategory] = useState<Category | null>(null);
 
+  const isHashtagSearch = query.startsWith("#") && query.length > 1;
+  const hashtagQuery = isHashtagSearch
+    ? query.slice(1).toLowerCase().trim()
+    : "";
+
   const results = useMemo(() => {
     let list = [...topics];
     if (activeCategory) {
       list = list.filter((t) => t.category === activeCategory);
     }
-    if (query.trim()) {
+    if (isHashtagSearch && hashtagQuery) {
+      list = list.filter((t) =>
+        t.hashtags?.some((h) => h.toLowerCase().includes(hashtagQuery))
+      );
+    } else if (query.trim()) {
       const q = query.trim().toLowerCase();
       list = list.filter(
         (t) =>
           t.title.toLowerCase().includes(q) ||
-          t.description.toLowerCase().includes(q)
+          t.description.toLowerCase().includes(q) ||
+          t.hashtags?.some((h) => h.toLowerCase().includes(q))
       );
     }
     return list;
-  }, [topics, activeCategory, query]);
+  }, [topics, activeCategory, query, isHashtagSearch, hashtagQuery]);
 
   const s = styles(colors, insets);
 
@@ -51,14 +61,19 @@ export default function ExploreScreen() {
         ]}
       >
         <Text style={s.title}>Explore</Text>
-        <View style={s.searchRow}>
-          <Feather name="search" size={16} color={colors.mutedForeground} />
+        <View style={[s.searchRow, isHashtagSearch && s.searchRowHashtag]}>
+          <Feather
+            name={isHashtagSearch ? "hash" : "search"}
+            size={16}
+            color={isHashtagSearch ? colors.primary : colors.mutedForeground}
+          />
           <ThemedInput
             style={[s.searchInput]}
-            placeholder="Search opinions..."
+            placeholder="Search or #hashtag..."
             placeholderTextColor={colors.mutedForeground}
             value={query}
             onChangeText={setQuery}
+            autoCapitalize="none"
           />
           {!!query && (
             <Pressable onPress={() => setQuery("")}>
@@ -66,6 +81,14 @@ export default function ExploreScreen() {
             </Pressable>
           )}
         </View>
+        {isHashtagSearch && (
+          <View style={s.hashtagBanner}>
+            <Feather name="hash" size={12} color={colors.primary} />
+            <Text style={s.hashtagBannerText}>
+              Showing posts tagged <Text style={{ fontWeight: "700" }}>#{hashtagQuery}</Text>
+            </Text>
+          </View>
+        )}
       </View>
 
       <View style={s.catGrid}>
@@ -93,7 +116,7 @@ export default function ExploreScreen() {
         })}
       </View>
 
-      {(!!query || !!activeCategory) && (
+      {(!!query.trim() || !!activeCategory) && (
         <FlatList
           data={results}
           keyExtractor={(t) => t.id}
@@ -144,6 +167,21 @@ const styles = (colors: ReturnType<typeof useColors>, insets: any) =>
       paddingHorizontal: 12,
       paddingVertical: 10,
       gap: 8,
+    },
+    searchRowHashtag: {
+      borderWidth: 1,
+      borderColor: colors.primary + "66",
+      backgroundColor: colors.primary + "11",
+    },
+    hashtagBanner: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 5,
+      paddingTop: 6,
+    },
+    hashtagBannerText: {
+      fontSize: 12,
+      color: colors.mutedForeground,
     },
     searchInput: {
       flex: 1,

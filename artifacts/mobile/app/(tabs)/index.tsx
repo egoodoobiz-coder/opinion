@@ -80,12 +80,6 @@ export default function FeedScreen() {
       >
         <View style={s.headerTop}>
           <Text style={s.logo}>Opinion</Text>
-          <Pressable
-            style={({ pressed }) => [s.createBtn, pressed && { opacity: 0.8 }]}
-            onPress={() => router.push("/create")}
-          >
-            <Feather name="plus" size={20} color={colors.primaryForeground} />
-          </Pressable>
         </View>
 
         <ScrollView
@@ -196,6 +190,13 @@ export default function FeedScreen() {
           </View>
         }
       />
+
+      <Pressable
+        style={({ pressed }) => [s.fab, pressed && { opacity: 0.85, transform: [{ scale: 0.95 }] }]}
+        onPress={() => router.push("/create")}
+      >
+        <Feather name="plus" size={26} color="#fff" />
+      </Pressable>
     </View>
   );
 }
@@ -215,7 +216,6 @@ const styles = (colors: ReturnType<typeof useColors>, insets: any) =>
     headerTop: {
       flexDirection: "row",
       alignItems: "center",
-      justifyContent: "space-between",
       marginBottom: 14,
     },
     logo: {
@@ -224,13 +224,21 @@ const styles = (colors: ReturnType<typeof useColors>, insets: any) =>
       color: colors.foreground,
       letterSpacing: -0.5,
     },
-    createBtn: {
-      width: 40,
-      height: 40,
-      borderRadius: 20,
+    fab: {
+      position: "absolute",
+      bottom: Platform.OS === "web" ? 76 : insets.bottom + 72,
+      right: 20,
+      width: 56,
+      height: 56,
+      borderRadius: 28,
       backgroundColor: colors.primary,
       alignItems: "center",
       justifyContent: "center",
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.35,
+      shadowRadius: 8,
+      elevation: 8,
     },
     filterRow: {
       flexDirection: "row",

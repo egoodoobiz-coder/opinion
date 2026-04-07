@@ -63,6 +63,7 @@ export interface Topic {
   aspectVotes?: Record<string, { up: number; down: number }>;
   targetDemographics?: UserDemographics;
   demoBreakdown?: DemoBreakdown;
+  hashtags?: string[];
   createdAt: number;
   createdBy: string;
   yesCount: number;
@@ -112,6 +113,7 @@ const SAMPLE_TOPICS: Topic[] = [
     description: "The age-old debate. Share your honest opinion.",
     category: "food",
     votingType: "yesno",
+    hashtags: ["pizza", "food", "pineapple"],
     createdAt: Date.now() - 86400000 * 2,
     createdBy: "system",
     yesCount: 142,
@@ -132,6 +134,7 @@ const SAMPLE_TOPICS: Topic[] = [
     description: "Which do you actually use most?",
     category: "tech",
     votingType: "ranking",
+    hashtags: ["streaming", "netflix", "tech"],
     rankingOptions: [
       { id: "netflix", label: "Netflix" },
       { id: "disney", label: "Disney+" },
@@ -164,6 +167,7 @@ const SAMPLE_TOPICS: Topic[] = [
     description: "Post-pandemic, is remote-first the right move for companies?",
     category: "lifestyle",
     votingType: "yesno",
+    hashtags: ["remotework", "work", "lifestyle"],
     targetDemographics: { occupation: "Employed" },
     createdAt: Date.now() - 3600000 * 5,
     createdBy: "system",
@@ -213,6 +217,7 @@ const SAMPLE_TOPICS: Topic[] = [
     description: "Should mental games be classified as sports?",
     category: "sports",
     votingType: "yesno",
+    hashtags: ["chess", "sports", "debate"],
     createdAt: Date.now() - 3600000 * 2,
     createdBy: "system",
     yesCount: 521,

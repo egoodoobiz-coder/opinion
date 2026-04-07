@@ -33,6 +33,7 @@ export default function CreateScreen() {
   const [votingType, setVotingType] = useState<VotingType>("yesno");
   const [rankOptions, setRankOptions] = useState<string[]>(["", ""]);
   const [aspectItems, setAspectItems] = useState<string[]>(["Service", "Punctuality", "Staff", "Cleanliness", "Price", "Quality"]);
+  const [tagsInput, setTagsInput] = useState("");
   const [targetAgeRange, setTargetAgeRange] = useState("");
   const [targetGender, setTargetGender] = useState("");
   const [targetOccupation, setTargetOccupation] = useState("");
@@ -48,6 +49,11 @@ export default function CreateScreen() {
   const OCCUPATIONS = ["Student", "Employed", "Self-employed", "Unemployed", "Retired"];
 
   const targetingCount = [targetAgeRange, targetGender, targetOccupation].filter(Boolean).length;
+
+  const parsedTags = tagsInput
+    .split(/[\s,]+/)
+    .map((t) => t.replace(/^#/, "").toLowerCase().replace(/[^a-z0-9]/g, ""))
+    .filter(Boolean);
 
   function selectVotingType(vt: VotingType) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -138,6 +144,7 @@ export default function CreateScreen() {
           : undefined,
         aspects: needsAspects ? validAspects.map((a) => a.trim()) : undefined,
         targetDemographics,
+        hashtags: parsedTags.length > 0 ? parsedTags : undefined,
       },
       accountType
     );
@@ -205,6 +212,28 @@ export default function CreateScreen() {
             maxLength={300}
             multiline
           />
+        </View>
+
+        {/* Hashtags */}
+        <View style={s.field}>
+          <Text style={s.label}>Hashtags</Text>
+          <ThemedInput
+            style={s.input}
+            placeholder="#pizza #food #debate"
+            placeholderTextColor={colors.mutedForeground}
+            value={tagsInput}
+            onChangeText={setTagsInput}
+            autoCapitalize="none"
+          />
+          {parsedTags.length > 0 && (
+            <View style={s.tagsRow}>
+              {parsedTags.map((tag) => (
+                <View key={tag} style={s.tagChip}>
+                  <Text style={s.tagChipText}>#{tag}</Text>
+                </View>
+              ))}
+            </View>
+          )}
         </View>
 
         {/* Category */}
@@ -594,6 +623,25 @@ const styles = (colors: ReturnType<typeof useColors>, insets: any) =>
       fontSize: 11,
       color: colors.mutedForeground,
       textAlign: "right",
+    },
+    tagsRow: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 6,
+      marginTop: 8,
+    },
+    tagChip: {
+      backgroundColor: colors.primary + "22",
+      borderColor: colors.primary,
+      borderWidth: 1,
+      borderRadius: 100,
+      paddingHorizontal: 10,
+      paddingVertical: 4,
+    },
+    tagChipText: {
+      fontSize: 12,
+      color: colors.primary,
+      fontWeight: "600",
     },
     catGrid: {
       flexDirection: "row",
