@@ -189,7 +189,7 @@ export default function ProfileScreen() {
 
   if (!isSignedIn) {
     return (
-      <View style={[s.container, s.center]}>
+      <View style={s.container}>
         <View style={[s.header, { paddingTop: Platform.OS === "web" ? 16 : insets.top + 4 }]}>
           <Text style={s.title}>Profile</Text>
         </View>
