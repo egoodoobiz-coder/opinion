@@ -45,9 +45,6 @@ importers:
       '@clerk/backend':
         specifier: ^3.2.4
         version: 3.8.5
-      '@workspace/api-zod':
-        specifier: workspace:*
-        version: link:../../lib/api-zod
       '@workspace/db':
         specifier: workspace:*
         version: link:../../lib/db
@@ -94,12 +91,6 @@ importers:
       thread-stream:
         specifier: 3.1.0
         version: 3.1.0
-
-  lib/api-zod:
-    dependencies:
-      zod:
-        specifier: 'catalog:'
-        version: 3.25.76
 
   lib/db:
     dependencies:
