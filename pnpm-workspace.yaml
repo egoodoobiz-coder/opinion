@@ -1,3 +1,4 @@
 packages:
   - 'artifacts/api-server'
-  - 'lib/*'
+  - 'lib/db'
+  - 'lib/api-zod'
