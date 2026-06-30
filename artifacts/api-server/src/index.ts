@@ -1,51 +1,61 @@
-import { runMigrations } from "stripe-replit-sync";
-import { getStripeSync } from "./stripeClient";
+import { getStripeSync, isStripeConfigured } from "./stripeClient";
 import app from "./app";
 import { logger } from "./lib/logger";
 
 async function initStripe() {
-  const databaseUrl = process.env.DATABASE_URL;
+  if (!isStripeConfigured()) {
+    logger.warn(
+      "STRIPE_SECRET_KEY not set — Stripe features disabled. " +
+        "Set STRIPE_SECRET_KEY in your .env to enable payments."
+    );
+    return;
+  }
 
+  const databaseUrl = process.env.DATABASE_URL;
   if (!databaseUrl) {
-    logger.warn("DATABASE_URL not set — skipping Stripe initialization");
+    logger.warn("DATABASE_URL not set — skipping Stripe schema migration");
     return;
   }
 
   try {
+    // Dynamically import so the module doesn't blow up when Stripe isn't connected
+    const { runMigrations } = await import("stripe-replit-sync");
     logger.info("Initializing Stripe schema...");
     await runMigrations({ databaseUrl, schema: "stripe" });
     logger.info("Stripe schema ready");
 
     const stripeSync = await getStripeSync();
 
-    logger.info("Setting up managed webhook...");
-    const webhookBaseUrl = `https://${process.env.REPLIT_DOMAINS?.split(",")[0]}`;
-    await stripeSync.findOrCreateManagedWebhook(
-      `${webhookBaseUrl}/api/stripe/webhook`
-    );
-    logger.info("Webhook configured");
+    const replitDomain = process.env.REPLIT_DOMAINS?.split(",")[0];
+    if (replitDomain) {
+      logger.info("Setting up managed webhook...");
+      const webhookBaseUrl = `https://${replitDomain}`;
+      await (stripeSync as any).findOrCreateManagedWebhook(
+        `${webhookBaseUrl}/api/stripe/webhook`
+      );
+      logger.info("Webhook configured");
+    } else {
+      logger.warn(
+        "REPLIT_DOMAINS not set — skipping webhook registration. " +
+          "Set API_BASE_URL and register your webhook manually for local dev."
+      );
+    }
 
     logger.info("Syncing Stripe data...");
-    stripeSync
-      .syncBackfill()
+    (stripeSync as any)
+      .syncBackfill?.()
       .then(() => logger.info("Stripe data synced"))
-      .catch((err: unknown) => logger.error({ err }, "Error syncing Stripe data"));
+      .catch((err: unknown) =>
+        logger.error({ err }, "Error syncing Stripe data")
+      );
   } catch (error: any) {
-    if (error?.message?.includes("not yet connected")) {
-      logger.warn("Stripe integration not connected yet — skipping Stripe initialization. Connect Stripe via the Integrations panel.");
-    } else {
-      logger.error({ err: error }, "Failed to initialize Stripe");
-      throw error;
-    }
+    logger.error({ err: error }, "Failed to initialize Stripe");
+    // Don't re-throw — let the server start without Stripe
   }
 }
 
-const rawPort = process.env["PORT"];
-
-if (!rawPort) {
-  throw new Error("PORT environment variable is required but was not provided.");
-}
-
+// Default to 3000 locally if PORT is not set
+const rawPort = process.env.PORT ?? "3000";
 const port = Number(rawPort);
 
 if (Number.isNaN(port) || port <= 0) {
@@ -54,7 +64,7 @@ if (Number.isNaN(port) || port <= 0) {
 
 await initStripe();
 
-const server = app.listen(port, (err) => {
+const server = app.listen(port, (err?: Error) => {
   if (err) {
     logger.error({ err }, "Error listening on port");
     process.exit(1);
@@ -62,15 +72,12 @@ const server = app.listen(port, (err) => {
   logger.info({ port }, "Server listening");
 });
 
-// Graceful shutdown — release the port immediately on SIGTERM/SIGINT
-// so the next restart doesn't hit EADDRINUSE
 function shutdown(signal: string) {
   logger.info({ signal }, "Shutting down gracefully...");
   server.close(() => {
     logger.info("HTTP server closed");
     process.exit(0);
   });
-  // Force-exit after 3 s if connections are still open
   setTimeout(() => process.exit(0), 3000).unref();
 }
 

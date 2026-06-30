@@ -24,36 +24,54 @@ export default function ExploreScreen() {
   const [query, setQuery] = useState("");
   const [activeCategory, setActiveCategory] = useState<Category | null>(null);
 
-  const isHashtagSearch = query.startsWith("#") && query.length > 1;
+  const trimmed = query.trim();
+  const isHashtagSearch = trimmed.startsWith("#") && trimmed.length > 1;
+  // Strip the leading # and any extra whitespace
   const hashtagQuery = isHashtagSearch
-    ? query.slice(1).toLowerCase().trim()
+    ? trimmed.slice(1).toLowerCase().trim()
     : "";
 
   const results = useMemo(() => {
     let list = [...topics];
+
+    // Category filter always applies first
     if (activeCategory) {
       list = list.filter((t) => t.category === activeCategory);
     }
+
     if (isHashtagSearch && hashtagQuery) {
-      list = list.filter((t) =>
-        t.hashtags?.some((h) => h.toLowerCase().includes(hashtagQuery))
-      );
-    } else if (query.trim()) {
-      const q = query.trim().toLowerCase();
+      // Hashtag search: match stored hashtags, title, OR description
+      // This way #chess finds "Is chess a sport?" even if it wasn't tagged
+      list = list.filter((t) => {
+        const tagMatch = t.hashtags?.some((h) =>
+          h.toLowerCase().includes(hashtagQuery)
+        );
+        const titleMatch = t.title.toLowerCase().includes(hashtagQuery);
+        const descMatch = t.description?.toLowerCase().includes(hashtagQuery);
+        return tagMatch || titleMatch || descMatch;
+      });
+    } else if (trimmed) {
+      // Plain text search: match title, description, OR hashtags (without needing #)
+      const q = trimmed.toLowerCase();
       list = list.filter(
         (t) =>
           t.title.toLowerCase().includes(q) ||
-          t.description.toLowerCase().includes(q) ||
+          t.description?.toLowerCase().includes(q) ||
           t.hashtags?.some((h) => h.toLowerCase().includes(q))
       );
     }
+
     return list;
-  }, [topics, activeCategory, query, isHashtagSearch, hashtagQuery]);
+  }, [topics, activeCategory, trimmed, isHashtagSearch, hashtagQuery]);
+
+  // Show results whenever there's any query OR a category is selected
+  const showResults = !!trimmed || !!activeCategory;
 
   const s = styles(colors, insets);
 
   return (
     <View style={s.container}>
+      {/* Header */}
       <View
         style={[
           s.header,
@@ -61,6 +79,7 @@ export default function ExploreScreen() {
         ]}
       >
         <Text style={s.title}>Explore</Text>
+
         <View style={[s.searchRow, isHashtagSearch && s.searchRowHashtag]}>
           <Icon
             name={isHashtagSearch ? "hash" : "search"}
@@ -68,29 +87,34 @@ export default function ExploreScreen() {
             color={isHashtagSearch ? colors.primary : colors.mutedForeground}
           />
           <ThemedInput
-            style={[s.searchInput]}
-            placeholder="Search or #hashtag..."
+            style={s.searchInput}
+            placeholder="Search topics or #hashtag..."
             placeholderTextColor={colors.mutedForeground}
             value={query}
             onChangeText={setQuery}
             autoCapitalize="none"
+            autoCorrect={false}
           />
           {!!query && (
-            <Pressable onPress={() => setQuery("")}>
+            <Pressable onPress={() => setQuery("")} hitSlop={8}>
               <Icon name="x" size={16} color={colors.mutedForeground} />
             </Pressable>
           )}
         </View>
+
         {isHashtagSearch && (
           <View style={s.hashtagBanner}>
             <Icon name="hash" size={12} color={colors.primary} />
             <Text style={s.hashtagBannerText}>
-              Showing posts tagged <Text style={{ fontWeight: "700" }}>#{hashtagQuery}</Text>
+              Showing posts matching{" "}
+              <Text style={{ fontWeight: "700" }}>#{hashtagQuery}</Text>
+              {" "}— including titles and tags
             </Text>
           </View>
         )}
       </View>
 
+      {/* Category grid */}
       <View style={s.catGrid}>
         {ALL_CATEGORIES.map((cat) => {
           const cfg = CATEGORY_CONFIG[cat];
@@ -101,7 +125,10 @@ export default function ExploreScreen() {
               key={cat}
               style={({ pressed }) => [
                 s.catTile,
-                active && { borderColor: cfg.color, backgroundColor: cfg.color + "22" },
+                active && {
+                  borderColor: cfg.color,
+                  backgroundColor: cfg.color + "22",
+                },
                 pressed && { opacity: 0.8 },
               ]}
               onPress={() => setActiveCategory(active ? null : cat)}
@@ -116,28 +143,44 @@ export default function ExploreScreen() {
         })}
       </View>
 
-      {(!!query.trim() || !!activeCategory) && (
+      {/* Results */}
+      {showResults && (
         <FlatList
           data={results}
           keyExtractor={(t) => t.id}
           contentContainerStyle={[
             s.list,
-            {
-              paddingBottom: Platform.OS === "web" ? 68 : insets.bottom + 56,
-            },
+            { paddingBottom: Platform.OS === "web" ? 68 : insets.bottom + 56 },
           ]}
           renderItem={({ item }) => (
             <TopicCard topic={item} userVoted={!!userVotes[item.id]} />
           )}
           showsVerticalScrollIndicator={false}
-          scrollEnabled={!!results.length}
           ListEmptyComponent={
             <View style={s.empty}>
               <Icon name="search" size={36} color={colors.border} />
-              <Text style={s.emptyText}>No results found</Text>
+              <Text style={s.emptyTitle}>No results found</Text>
+              <Text style={s.emptySubtitle}>
+                {isHashtagSearch
+                  ? `No posts match "#${hashtagQuery}" — try a different tag or word`
+                  : "Try a different search term or browse by category"}
+              </Text>
             </View>
           }
         />
+      )}
+
+      {/* Default state — no search, no category */}
+      {!showResults && (
+        <View style={s.defaultHint}>
+          <Icon name="search" size={28} color={colors.border} />
+          <Text style={s.defaultHintText}>
+            Search by title, description, or #hashtag
+          </Text>
+          <Text style={s.defaultHintSub}>
+            Or tap a category above to browse
+          </Text>
+        </View>
       )}
     </View>
   );
@@ -167,9 +210,10 @@ const styles = (colors: ReturnType<typeof useColors>, insets: any) =>
       paddingHorizontal: 12,
       paddingVertical: 10,
       gap: 8,
+      borderWidth: 1,
+      borderColor: "transparent",
     },
     searchRowHashtag: {
-      borderWidth: 1,
       borderColor: colors.primary + "66",
       backgroundColor: colors.primary + "11",
     },
@@ -177,11 +221,11 @@ const styles = (colors: ReturnType<typeof useColors>, insets: any) =>
       flexDirection: "row",
       alignItems: "center",
       gap: 5,
-      paddingTop: 6,
     },
     hashtagBannerText: {
       fontSize: 12,
       color: colors.mutedForeground,
+      flex: 1,
     },
     searchInput: {
       flex: 1,
@@ -213,18 +257,31 @@ const styles = (colors: ReturnType<typeof useColors>, insets: any) =>
       color: colors.foreground,
       textAlign: "center",
     },
-    catCount: {
-      fontSize: 10,
-      color: colors.mutedForeground,
-    },
+    catCount: { fontSize: 10, color: colors.mutedForeground },
     list: { paddingHorizontal: 16, paddingTop: 8 },
-    empty: {
-      alignItems: "center",
-      paddingTop: 60,
-      gap: 8,
+    empty: { alignItems: "center", paddingTop: 60, gap: 8, paddingHorizontal: 32 },
+    emptyTitle: { fontSize: 16, fontWeight: "600", color: colors.mutedForeground },
+    emptySubtitle: {
+      fontSize: 13,
+      color: colors.border,
+      textAlign: "center",
+      lineHeight: 19,
     },
-    emptyText: {
-      fontSize: 16,
+    defaultHint: {
+      flex: 1,
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 8,
+      paddingBottom: 80,
+    },
+    defaultHintText: {
+      fontSize: 14,
       color: colors.mutedForeground,
+      textAlign: "center",
+    },
+    defaultHintSub: {
+      fontSize: 12,
+      color: colors.border,
+      textAlign: "center",
     },
   });

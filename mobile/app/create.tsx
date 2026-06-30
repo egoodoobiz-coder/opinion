@@ -38,6 +38,7 @@ export default function CreateScreen() {
   const [targetGender, setTargetGender] = useState("");
   const [targetOccupation, setTargetOccupation] = useState("");
   const [showTargeting, setShowTargeting] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const inputRefs = useRef<Array<TextInput | null>>([]);
   const aspectRefs = useRef<Array<TextInput | null>>([]);
 
@@ -67,10 +68,13 @@ export default function CreateScreen() {
   function addRankOption() {
     if (rankOptions.length >= 8) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const nextIdx = rankOptions.length;
     setRankOptions((prev) => [...prev, ""]);
-    setTimeout(() => {
-      inputRefs.current[rankOptions.length]?.focus();
-    }, 80);
+    // Use captured index — avoids stale closure from setTimeout referencing
+    // rankOptions.length which doesn't update until the next render
+    requestAnimationFrame(() => {
+      inputRefs.current[nextIdx]?.focus();
+    });
   }
 
   function removeRankOption(idx: number) {
@@ -86,10 +90,11 @@ export default function CreateScreen() {
   function addAspectItem() {
     if (aspectItems.length >= 10) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const nextIdx = aspectItems.length;
     setAspectItems((prev) => [...prev, ""]);
-    setTimeout(() => {
-      aspectRefs.current[aspectItems.length]?.focus();
-    }, 80);
+    requestAnimationFrame(() => {
+      aspectRefs.current[nextIdx]?.focus();
+    });
   }
 
   function removeAspectItem(idx: number) {
@@ -130,26 +135,33 @@ export default function CreateScreen() {
           }
         : undefined;
 
-    addTopic(
-      {
-        title: title.trim(),
-        description: description.trim(),
-        category,
-        votingType,
-        rankingOptions: needsRankOptions
-          ? validRankOpts.map((label, i) => ({
-              id: `opt_${i}_${Date.now()}`,
-              label: label.trim(),
-            }))
-          : undefined,
-        aspects: needsAspects ? validAspects.map((a) => a.trim()) : undefined,
-        targetDemographics,
-        hashtags: parsedTags.length > 0 ? parsedTags : undefined,
-      },
-      accountType
-    );
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    router.back();
+    setSubmitting(true);
+    try {
+      addTopic(
+        {
+          title: title.trim(),
+          description: description.trim(),
+          category,
+          votingType,
+          rankingOptions: needsRankOptions
+            ? validRankOpts.map((label, i) => ({
+                id: `opt_${i}_${Date.now()}`,
+                label: label.trim(),
+              }))
+            : undefined,
+          aspects: needsAspects ? validAspects.map((a) => a.trim()) : undefined,
+          targetDemographics,
+          hashtags: parsedTags.length > 0 ? parsedTags : undefined,
+        },
+        accountType
+      );
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      router.back();
+    } catch (err: any) {
+      Alert.alert("Error", err?.message ?? "Could not create topic. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   const s = styles(colors, insets);
@@ -171,9 +183,14 @@ export default function CreateScreen() {
         <Text style={s.headerTitle}>New Topic</Text>
         <Pressable
           onPress={submit}
-          style={({ pressed }) => [s.submitBtn, pressed && { opacity: 0.8 }]}
+          disabled={!title.trim() || submitting}
+          style={({ pressed }) => [
+            s.submitBtn,
+            (!title.trim() || submitting) && { opacity: 0.4 },
+            pressed && title.trim() && !submitting && { opacity: 0.8 },
+          ]}
         >
-          <Text style={s.submitLabel}>Post</Text>
+          <Text style={s.submitLabel}>{submitting ? "Posting..." : "Post"}</Text>
         </Pressable>
       </View>
 

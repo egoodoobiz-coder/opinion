@@ -1,19 +1,26 @@
 import { Router } from "express";
+import { createClerkClient } from "@clerk/backend";
 import { db } from "@workspace/db";
 import { verificationRequests, users, admins } from "@workspace/db/schema";
 import { eq, desc } from "drizzle-orm";
 import { randomUUID } from "crypto";
+import { logger } from "../lib/logger";
 
 const router = Router();
 
-// Decode Clerk JWT and extract userId (sub claim)
+const clerk = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY });
+
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const MAX_EMAIL_LENGTH = 254;
+const MAX_NOTE_LENGTH = 1000;
+const MAX_NAME_LENGTH = 200;
+
 async function getAuthenticatedUserId(req: any): Promise<string | null> {
   try {
     const authHeader = req.headers.authorization;
     if (!authHeader?.startsWith("Bearer ")) return null;
     const token = authHeader.slice(7);
-    // Decode JWT payload without verification (Clerk tokens are trusted in dev)
-    const payload = JSON.parse(Buffer.from(token.split(".")[1], "base64url").toString());
+    const payload = await clerk.verifyToken(token);
     return payload.sub ?? null;
   } catch {
     return null;
@@ -29,36 +36,28 @@ async function checkIsAdmin(userId: string): Promise<boolean> {
 // POST /admin/claim — grant admin access using the setup secret
 router.post("/admin/claim", async (req: any, res: any) => {
   try {
-    const { secret, userEmail, clerkUserId } = req.body;
+    const { secret, userEmail } = req.body;
     const adminSecret = process.env.ADMIN_SETUP_SECRET;
-
-    console.log("[admin/claim] secret match:", secret === adminSecret, "| clerkUserId:", clerkUserId);
 
     if (!adminSecret || !secret || secret.trim() !== adminSecret) {
       return res.status(403).json({ error: "Invalid admin secret" });
     }
 
-    // Try JWT first, fall back to body-provided clerkUserId (secret is the auth factor)
-    let userId = await getAuthenticatedUserId(req);
-    if (!userId && clerkUserId) {
-      console.log("[admin/claim] JWT decode failed, using clerkUserId from body");
-      userId = clerkUserId;
-    }
+    const userId = await getAuthenticatedUserId(req);
     if (!userId) {
       return res.status(401).json({ error: "Could not identify user — please sign out and back in" });
     }
 
-    // Check if already admin
     const alreadyAdmin = await checkIsAdmin(userId);
     if (alreadyAdmin) {
       return res.json({ success: true, message: "Already an admin" });
     }
 
     await db.insert(admins).values({ userId, userEmail: userEmail ?? null });
-    console.log("[admin/claim] granted admin to", userId, userEmail);
+    logger.info({ userId }, "Admin access granted");
     res.json({ success: true, message: "Admin access granted" });
   } catch (err) {
-    console.error("[admin/claim] error:", err);
+    logger.error({ err }, "admin/claim error");
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -66,13 +65,12 @@ router.post("/admin/claim", async (req: any, res: any) => {
 // GET /admin/is-admin — check if current user is admin
 router.get("/admin/is-admin", async (req: any, res: any) => {
   try {
-    let userId = await getAuthenticatedUserId(req);
-    if (!userId) userId = (req.headers["x-clerk-user-id"] as string) ?? null;
+    const userId = await getAuthenticatedUserId(req);
     if (!userId) return res.status(401).json({ error: "Unauthorized" });
     const isAdmin = await checkIsAdmin(userId);
     res.json({ isAdmin });
   } catch (err) {
-    console.error("admin/is-admin error", err);
+    logger.error({ err }, "admin/is-admin error");
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -80,16 +78,25 @@ router.get("/admin/is-admin", async (req: any, res: any) => {
 // POST /admin/verify-requests — submit a verification request
 router.post("/admin/verify-requests", async (req: any, res: any) => {
   try {
-    let userId = await getAuthenticatedUserId(req);
-    if (!userId) userId = req.body.clerkUserId ?? (req.headers["x-clerk-user-id"] as string) ?? null;
+    const userId = await getAuthenticatedUserId(req);
     if (!userId) return res.status(401).json({ error: "Unauthorized" });
 
     const { userEmail, userName, requestedAccountType, note } = req.body;
+
     if (!userEmail || !requestedAccountType) {
       return res.status(400).json({ error: "Missing required fields" });
     }
+    if (typeof userEmail !== "string" || userEmail.length > MAX_EMAIL_LENGTH || !EMAIL_REGEX.test(userEmail)) {
+      return res.status(400).json({ error: "Invalid email address" });
+    }
     if (!["company", "celebrity"].includes(requestedAccountType)) {
       return res.status(400).json({ error: "Invalid account type" });
+    }
+    if (userName !== undefined && (typeof userName !== "string" || userName.length > MAX_NAME_LENGTH)) {
+      return res.status(400).json({ error: "Invalid username" });
+    }
+    if (note !== undefined && (typeof note !== "string" || note.length > MAX_NOTE_LENGTH)) {
+      return res.status(400).json({ error: "Note too long" });
     }
 
     const existing = await db
@@ -121,7 +128,7 @@ router.post("/admin/verify-requests", async (req: any, res: any) => {
 
     res.json({ success: true, request: newRequest });
   } catch (err) {
-    console.error("verify-requests POST error", err);
+    logger.error({ err }, "verify-requests POST error");
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -129,8 +136,7 @@ router.post("/admin/verify-requests", async (req: any, res: any) => {
 // GET /admin/verify-requests/me — current user's request status
 router.get("/admin/verify-requests/me", async (req: any, res: any) => {
   try {
-    let userId = await getAuthenticatedUserId(req);
-    if (!userId) userId = (req.headers["x-clerk-user-id"] as string) ?? null;
+    const userId = await getAuthenticatedUserId(req);
     if (!userId) return res.status(401).json({ error: "Unauthorized" });
 
     const requests = await db
@@ -141,7 +147,7 @@ router.get("/admin/verify-requests/me", async (req: any, res: any) => {
 
     res.json({ requests });
   } catch (err) {
-    console.error("verify-requests/me error", err);
+    logger.error({ err }, "verify-requests/me error");
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -160,7 +166,7 @@ router.get("/admin/verify-requests", async (req: any, res: any) => {
 
     res.json({ requests });
   } catch (err) {
-    console.error("verify-requests GET error", err);
+    logger.error({ err }, "verify-requests GET error");
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -212,7 +218,7 @@ router.patch("/admin/verify-requests/:id", async (req: any, res: any) => {
 
     res.json({ success: true, status: newStatus });
   } catch (err) {
-    console.error("verify-requests PATCH error", err);
+    logger.error({ err }, "verify-requests PATCH error");
     res.status(500).json({ error: "Internal server error" });
   }
 });

@@ -20,12 +20,23 @@ import { CATEGORY_CONFIG } from "@/constants/categories";
 import { useApp, type DemoBreakdown } from "@/context/AppContext";
 import { useColors } from "@/hooks/useColors";
 
+const COMMENT_MAX_LENGTH = 500;
+
 export default function TopicDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { topics, getUserVote, voteYesNo, voteRating, voteRanking, voteAspect, addComment, userId } = useApp();
+  const {
+    topics,
+    getUserVote,
+    voteYesNo,
+    voteRating,
+    voteRanking,
+    voteAspect,
+    addComment,
+    userId,
+  } = useApp();
   const { user } = useUser();
 
   const topic = useMemo(() => topics.find((t) => t.id === id), [topics, id]);
@@ -33,27 +44,52 @@ export default function TopicDetailScreen() {
 
   const [pendingRanking, setPendingRanking] = useState<string[] | null>(null);
   const [commentText, setCommentText] = useState("");
-  const [submittingComment, setSubmittingComment] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
 
+  // The current user ID — used to check if they are the topic creator
+  const currentUserId = user?.id ?? userId;
+  const isCreator = topic?.createdBy === currentUserId;
+
   function submitComment() {
-    if (!commentText.trim() || !topic) return;
+    const trimmed = commentText.trim();
+    if (!trimmed || !topic) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setSubmittingComment(true);
-    const authorId = user?.id ?? userId;
+
+    const authorId = currentUserId;
     const authorName = user
-      ? [user.firstName, user.lastName].filter(Boolean).join(" ") || user.primaryEmailAddress?.emailAddress?.split("@")[0] || "Anonymous"
+      ? [user.firstName, user.lastName].filter(Boolean).join(" ") ||
+        user.primaryEmailAddress?.emailAddress?.split("@")[0] ||
+        "Anonymous"
       : "Anonymous";
-    addComment(topic.id, commentText.trim(), authorId, authorName);
+
+    addComment(topic.id, trimmed, authorId, authorName);
     setCommentText("");
-    setSubmittingComment(false);
     setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
   }
 
   if (!topic) {
     return (
-      <View style={{ flex: 1, backgroundColor: colors.background, alignItems: "center", justifyContent: "center" }}>
-        <Text style={{ color: colors.foreground }}>Topic not found</Text>
+      <View
+        style={{
+          flex: 1,
+          backgroundColor: colors.background,
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 8,
+        }}
+      >
+        <Icon name="alert-circle" size={36} color={colors.border} />
+        <Text style={{ color: colors.mutedForeground, fontSize: 15 }}>
+          Topic not found
+        </Text>
+        <Pressable
+          onPress={() => router.back()}
+          style={({ pressed }) => [{ opacity: pressed ? 0.6 : 1, marginTop: 4 }]}
+        >
+          <Text style={{ color: colors.primary, fontWeight: "700", fontSize: 14 }}>
+            Go back
+          </Text>
+        </Pressable>
       </View>
     );
   }
@@ -80,6 +116,7 @@ export default function TopicDetailScreen() {
       behavior={Platform.OS === "ios" ? "padding" : "height"}
       keyboardVerticalOffset={0}
     >
+      {/* Header */}
       <View
         style={[
           s.header,
@@ -100,10 +137,7 @@ export default function TopicDetailScreen() {
 
       <ScrollView
         ref={scrollRef}
-        contentContainerStyle={[
-          s.content,
-          { paddingBottom: 16 },
-        ]}
+        contentContainerStyle={[s.content, { paddingBottom: 16 }]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
@@ -112,6 +146,7 @@ export default function TopicDetailScreen() {
           <Text style={s.desc}>{topic.description}</Text>
         )}
 
+        {/* ── Yes / No ──────────────────────────────────────────────────── */}
         {hasYesNo && (
           <View style={s.section}>
             <View style={s.sectionHeader}>
@@ -172,11 +207,7 @@ export default function TopicDetailScreen() {
                 <Icon
                   name="thumbs-up"
                   size={18}
-                  color={
-                    userVote?.yesno === "yes"
-                      ? colors.primaryForeground
-                      : colors.yes
-                  }
+                  color={userVote?.yesno === "yes" ? colors.primaryForeground : colors.yes}
                 />
                 <Text
                   style={[
@@ -201,11 +232,7 @@ export default function TopicDetailScreen() {
                 <Icon
                   name="thumbs-down"
                   size={18}
-                  color={
-                    userVote?.yesno === "no"
-                      ? colors.primaryForeground
-                      : colors.no
-                  }
+                  color={userVote?.yesno === "no" ? colors.primaryForeground : colors.no}
                 />
                 <Text
                   style={[
@@ -220,6 +247,7 @@ export default function TopicDetailScreen() {
           </View>
         )}
 
+        {/* ── Star Rating ───────────────────────────────────────────────── */}
         {hasRating && (
           <View style={s.section}>
             <View style={s.sectionHeader}>
@@ -256,6 +284,7 @@ export default function TopicDetailScreen() {
           </View>
         )}
 
+        {/* ── Ranking ───────────────────────────────────────────────────── */}
         {hasRanking && topic.rankingOptions && (
           <View style={s.section}>
             <View style={s.sectionHeader}>
@@ -286,17 +315,16 @@ export default function TopicDetailScreen() {
               <Pressable
                 style={({ pressed }) => [
                   s.submitRankBtn,
-                  pressed && { opacity: 0.8 },
+                  !pendingRanking && s.submitRankBtnDisabled,
+                  pressed && pendingRanking && { opacity: 0.8 },
                 ]}
                 onPress={() => {
-                  if (pendingRanking) {
-                    voteRanking(topic.id, pendingRanking);
-                    Haptics.notificationAsync(
-                      Haptics.NotificationFeedbackType.Success
-                    );
-                    setPendingRanking(null);
-                  }
+                  if (!pendingRanking) return;
+                  voteRanking(topic.id, pendingRanking);
+                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                  setPendingRanking(null);
                 }}
+                disabled={!pendingRanking}
               >
                 <Icon name="check" size={16} color={colors.primaryForeground} />
                 <Text style={s.submitRankLabel}>
@@ -306,21 +334,21 @@ export default function TopicDetailScreen() {
             </View>
           </View>
         )}
+
+        {/* ── Aspects ───────────────────────────────────────────────────── */}
         {hasAspects && topic.aspects && (
           <View style={s.section}>
             <View style={s.sectionHeader}>
               <Icon name="layers" size={15} color={colors.primary} />
               <Text style={s.sectionTitle}>Aspect Rating</Text>
-              <Text style={s.voteCount}>
-                {topic.aspects.length} criteria
-              </Text>
+              <Text style={s.voteCount}>{topic.aspects.length} criteria</Text>
             </View>
 
             <View style={s.aspectList}>
               {topic.aspects.map((aspect) => {
                 const av = topic.aspectVotes?.[aspect] ?? { up: 0, down: 0 };
-                const total = av.up + av.down;
-                const upPct = total > 0 ? Math.round((av.up / total) * 100) : 0;
+                const aspectTotal = av.up + av.down;
+                const upPct = aspectTotal > 0 ? Math.round((av.up / aspectTotal) * 100) : 0;
                 const userChoice = userVote?.aspectChoices?.[aspect];
 
                 return (
@@ -345,7 +373,12 @@ export default function TopicDetailScreen() {
                             size={13}
                             color={userChoice === "up" ? "#fff" : colors.yes}
                           />
-                          <Text style={[s.aspectBtnLabel, { color: userChoice === "up" ? "#fff" : colors.yes }]}>
+                          <Text
+                            style={[
+                              s.aspectBtnLabel,
+                              { color: userChoice === "up" ? "#fff" : colors.yes },
+                            ]}
+                          >
                             {av.up}
                           </Text>
                         </Pressable>
@@ -366,17 +399,25 @@ export default function TopicDetailScreen() {
                             size={13}
                             color={userChoice === "down" ? "#fff" : colors.no}
                           />
-                          <Text style={[s.aspectBtnLabel, { color: userChoice === "down" ? "#fff" : colors.no }]}>
+                          <Text
+                            style={[
+                              s.aspectBtnLabel,
+                              { color: userChoice === "down" ? "#fff" : colors.no },
+                            ]}
+                          >
                             {av.down}
                           </Text>
                         </Pressable>
                       </View>
                     </View>
-                    {total > 0 && (
+                    {aspectTotal > 0 && (
                       <View style={s.aspectBarWrap}>
                         <View style={s.aspectBarBg}>
                           <View
-                            style={[s.aspectBarFill, { width: `${upPct}%` as any, backgroundColor: colors.yes }]}
+                            style={[
+                              s.aspectBarFill,
+                              { width: `${upPct}%` as any, backgroundColor: colors.yes },
+                            ]}
                           />
                         </View>
                         <Text style={s.aspectPct}>{upPct}% 👍</Text>
@@ -389,12 +430,18 @@ export default function TopicDetailScreen() {
           </View>
         )}
 
-        {/* Demographic Breakdown */}
-        {topic.demoBreakdown && Object.keys(topic.demoBreakdown).length > 0 && (
-          <DemoBreakdownPanel breakdown={topic.demoBreakdown} colors={colors} s={s} />
-        )}
+        {/* ── Demographic Breakdown — creator only ──────────────────────── */}
+        {isCreator &&
+          topic.demoBreakdown &&
+          Object.keys(topic.demoBreakdown).length > 0 && (
+            <DemoBreakdownPanel
+              breakdown={topic.demoBreakdown}
+              colors={colors}
+              s={s}
+            />
+          )}
 
-        {/* Comments Section */}
+        {/* ── Comments ──────────────────────────────────────────────────── */}
         <View style={s.commentsSection}>
           <View style={s.commentsSectionHeader}>
             <Icon name="message-circle" size={15} color={colors.mutedForeground} />
@@ -440,13 +487,13 @@ export default function TopicDetailScreen() {
           value={commentText}
           onChangeText={setCommentText}
           multiline
-          maxLength={500}
+          maxLength={COMMENT_MAX_LENGTH}
           returnKeyType="send"
           onSubmitEditing={submitComment}
         />
         <Pressable
           onPress={submitComment}
-          disabled={!commentText.trim() || submittingComment}
+          disabled={!commentText.trim()}
           style={({ pressed }) => [
             s.sendBtn,
             { opacity: !commentText.trim() ? 0.4 : pressed ? 0.7 : 1 },
@@ -458,6 +505,8 @@ export default function TopicDetailScreen() {
     </KeyboardAvoidingView>
   );
 }
+
+// ── Demographic Breakdown Panel ────────────────────────────────────────────────
 
 const DEMO_LABELS: Record<keyof DemoBreakdown, string> = {
   ageRange: "Age Range",
@@ -485,25 +534,34 @@ function DemoBreakdownPanel({
     <View style={s.section}>
       <Pressable
         style={s.sectionHeader}
-        onPress={() => setExpanded((v) => !v)}
+        onPress={() => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          setExpanded((v) => !v);
+        }}
       >
         <Icon name="bar-chart-2" size={15} color={colors.primary} />
         <Text style={s.sectionTitle}>Who Voted</Text>
-        <Text style={s.voteCount}>{fields.length} breakdown{fields.length > 1 ? "s" : ""}</Text>
-        <Icon name={expanded ? "chevron-up" : "chevron-down"} size={14} color={colors.mutedForeground} />
+        <Text style={s.voteCount}>
+          {fields.length} breakdown{fields.length > 1 ? "s" : ""}
+        </Text>
+        <Icon
+          name={expanded ? "chevron-up" : "chevron-down"}
+          size={14}
+          color={colors.mutedForeground}
+        />
       </Pressable>
 
       {expanded && (
         <View style={s.breakdownBody}>
           {fields.map((field) => {
             const data = breakdown[field]!;
-            const total = Object.values(data).reduce((a, b) => a + b, 0);
+            const fieldTotal = Object.values(data).reduce((a, b) => a + b, 0);
             const sorted = Object.entries(data).sort((a, b) => b[1] - a[1]);
             return (
               <View key={field} style={s.breakdownGroup}>
                 <Text style={s.breakdownGroupLabel}>{DEMO_LABELS[field]}</Text>
                 {sorted.map(([key, count]) => {
-                  const pct = total > 0 ? Math.round((count / total) * 100) : 0;
+                  const pct = fieldTotal > 0 ? Math.round((count / fieldTotal) * 100) : 0;
                   return (
                     <View key={key} style={s.breakdownRow}>
                       <Text style={s.breakdownKey} numberOfLines={1}>{key}</Text>
@@ -525,6 +583,8 @@ function DemoBreakdownPanel({
     </View>
   );
 }
+
+// ── Styles ─────────────────────────────────────────────────────────────────────
 
 const styles = (colors: ReturnType<typeof useColors>, insets: any) =>
   StyleSheet.create({
@@ -556,17 +616,8 @@ const styles = (colors: ReturnType<typeof useColors>, insets: any) =>
     },
     catLabel: { fontSize: 12, fontWeight: "600" },
     content: { padding: 16, gap: 20 },
-    title: {
-      fontSize: 22,
-      fontWeight: "800",
-      color: colors.foreground,
-      lineHeight: 30,
-    },
-    desc: {
-      fontSize: 15,
-      color: colors.mutedForeground,
-      lineHeight: 22,
-    },
+    title: { fontSize: 22, fontWeight: "800", color: colors.foreground, lineHeight: 30 },
+    desc: { fontSize: 15, color: colors.mutedForeground, lineHeight: 22 },
     section: {
       backgroundColor: colors.card,
       borderRadius: 18,
@@ -575,28 +626,11 @@ const styles = (colors: ReturnType<typeof useColors>, insets: any) =>
       borderWidth: 1,
       borderColor: colors.border,
     },
-    sectionHeader: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 8,
-    },
-    sectionTitle: {
-      fontSize: 15,
-      fontWeight: "700",
-      color: colors.foreground,
-      flex: 1,
-    },
-    voteCount: {
-      fontSize: 12,
-      color: colors.mutedForeground,
-    },
+    sectionHeader: { flexDirection: "row", alignItems: "center", gap: 8 },
+    sectionTitle: { fontSize: 15, fontWeight: "700", color: colors.foreground, flex: 1 },
+    voteCount: { fontSize: 12, color: colors.mutedForeground },
     yesnoResults: { gap: 10 },
-    yesnoBar: {
-      flexDirection: "row",
-      height: 10,
-      borderRadius: 5,
-      overflow: "hidden",
-    },
+    yesnoBar: { flexDirection: "row", height: 10, borderRadius: 5, overflow: "hidden" },
     yesBarFill: { borderRadius: 5 },
     noBarFill: { borderRadius: 5 },
     yesnoLabels: { flexDirection: "row", justifyContent: "space-between" },
@@ -604,275 +638,110 @@ const styles = (colors: ReturnType<typeof useColors>, insets: any) =>
     dot: { width: 8, height: 8, borderRadius: 4 },
     percentText: { fontSize: 14, fontWeight: "700" },
     absCount: { fontSize: 12, color: colors.mutedForeground },
-    voteButtons: {
-      flexDirection: "row",
-      gap: 12,
-    },
+    voteButtons: { flexDirection: "row", gap: 12 },
     yesBtn: {
-      flex: 1,
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "center",
-      gap: 8,
-      paddingVertical: 14,
-      borderRadius: 14,
-      borderWidth: 2,
-      borderColor: colors.yes,
-      backgroundColor: colors.yesBg ?? colors.muted,
+      flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center",
+      gap: 8, paddingVertical: 14, borderRadius: 14, borderWidth: 2,
+      borderColor: colors.yes, backgroundColor: (colors as any).yesBg ?? colors.muted,
     },
-    yesBtnActive: {
-      backgroundColor: colors.yes,
-    },
+    yesBtnActive: { backgroundColor: colors.yes },
     noBtn: {
-      flex: 1,
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "center",
-      gap: 8,
-      paddingVertical: 14,
-      borderRadius: 14,
-      borderWidth: 2,
-      borderColor: colors.no,
-      backgroundColor: colors.noBg ?? colors.muted,
+      flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center",
+      gap: 8, paddingVertical: 14, borderRadius: 14, borderWidth: 2,
+      borderColor: colors.no, backgroundColor: (colors as any).noBg ?? colors.muted,
     },
-    noBtnActive: {
-      backgroundColor: colors.no,
-    },
-    voteLabel: {
-      fontSize: 16,
-      fontWeight: "700",
-    },
-    ratingResult: {
-      alignItems: "center",
-      gap: 8,
-      paddingVertical: 8,
-    },
-    avgRatingNum: {
-      fontSize: 48,
-      fontWeight: "800",
-      color: colors.star,
-    },
+    noBtnActive: { backgroundColor: colors.no },
+    voteLabel: { fontSize: 16, fontWeight: "700" },
+    ratingResult: { alignItems: "center", gap: 8, paddingVertical: 8 },
+    avgRatingNum: { fontSize: 48, fontWeight: "800", color: colors.star },
     avgRatingLabel: {
-      fontSize: 12,
-      color: colors.mutedForeground,
-      textTransform: "uppercase",
-      letterSpacing: 0.8,
+      fontSize: 12, color: colors.mutedForeground,
+      textTransform: "uppercase", letterSpacing: 0.8,
     },
-    ratingInteractive: {
-      alignItems: "center",
-      gap: 8,
-      paddingTop: 4,
-    },
-    ratingPrompt: {
-      fontSize: 13,
-      color: colors.mutedForeground,
-    },
+    ratingInteractive: { alignItems: "center", gap: 8, paddingTop: 4 },
+    ratingPrompt: { fontSize: 13, color: colors.mutedForeground },
     rankResultLabel: {
-      fontSize: 12,
-      fontWeight: "600",
-      color: colors.mutedForeground,
-      textTransform: "uppercase",
-      letterSpacing: 0.5,
+      fontSize: 12, fontWeight: "600", color: colors.mutedForeground,
+      textTransform: "uppercase", letterSpacing: 0.5,
     },
     rankVoteSection: {
-      gap: 12,
-      paddingTop: 4,
-      borderTopWidth: 1,
-      borderTopColor: colors.border,
+      gap: 12, paddingTop: 4,
+      borderTopWidth: 1, borderTopColor: colors.border,
     },
-    rankPrompt: {
-      fontSize: 13,
-      color: colors.mutedForeground,
-    },
+    rankPrompt: { fontSize: 13, color: colors.mutedForeground },
     submitRankBtn: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "center",
-      gap: 8,
-      backgroundColor: colors.primary,
-      borderRadius: 14,
-      paddingVertical: 14,
+      flexDirection: "row", alignItems: "center", justifyContent: "center",
+      gap: 8, backgroundColor: colors.primary, borderRadius: 14, paddingVertical: 14,
     },
-    submitRankLabel: {
-      fontSize: 15,
-      fontWeight: "700",
-      color: colors.primaryForeground,
-    },
+    submitRankBtnDisabled: { opacity: 0.4 },
+    submitRankLabel: { fontSize: 15, fontWeight: "700", color: colors.primaryForeground },
     aspectList: { gap: 14 },
     aspectRow: { gap: 6 },
-    aspectTopRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "space-between",
-    },
-    aspectLabel: {
-      fontSize: 14,
-      fontWeight: "600",
-      color: colors.foreground,
-      flex: 1,
-      marginRight: 8,
-    },
-    aspectVoteBtns: {
-      flexDirection: "row",
-      gap: 6,
-    },
+    aspectTopRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+    aspectLabel: { fontSize: 14, fontWeight: "600", color: colors.foreground, flex: 1, marginRight: 8 },
+    aspectVoteBtns: { flexDirection: "row", gap: 6 },
     aspectBtn: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 4,
-      paddingHorizontal: 10,
-      paddingVertical: 6,
-      borderRadius: 20,
-      borderWidth: 1.5,
+      flexDirection: "row", alignItems: "center", gap: 4,
+      paddingHorizontal: 10, paddingVertical: 6, borderRadius: 20, borderWidth: 1.5,
     },
-    aspectBtnUp: {
-      borderColor: colors.yes,
-      backgroundColor: colors.yes + "18",
-    },
-    aspectBtnUpActive: {
-      backgroundColor: colors.yes,
-    },
-    aspectBtnDown: {
-      borderColor: colors.no,
-      backgroundColor: colors.no + "18",
-    },
-    aspectBtnDownActive: {
-      backgroundColor: colors.no,
-    },
-    aspectBtnLabel: {
-      fontSize: 12,
-      fontWeight: "700",
-    },
-    aspectBarWrap: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 8,
-    },
+    aspectBtnUp: { borderColor: colors.yes, backgroundColor: colors.yes + "18" },
+    aspectBtnUpActive: { backgroundColor: colors.yes },
+    aspectBtnDown: { borderColor: colors.no, backgroundColor: colors.no + "18" },
+    aspectBtnDownActive: { backgroundColor: colors.no },
+    aspectBtnLabel: { fontSize: 12, fontWeight: "700" },
+    aspectBarWrap: { flexDirection: "row", alignItems: "center", gap: 8 },
     aspectBarBg: {
-      flex: 1,
-      height: 5,
-      borderRadius: 3,
-      backgroundColor: colors.no + "33",
-      overflow: "hidden",
+      flex: 1, height: 5, borderRadius: 3,
+      backgroundColor: colors.no + "33", overflow: "hidden",
     },
-    aspectBarFill: {
-      height: "100%",
-      borderRadius: 3,
-    },
-    aspectPct: {
-      fontSize: 11,
-      color: colors.mutedForeground,
-      width: 50,
-      textAlign: "right",
-    },
-    commentsSection: {
-      gap: 12,
-      paddingTop: 4,
-    },
+    aspectBarFill: { height: "100%", borderRadius: 3 },
+    aspectPct: { fontSize: 11, color: colors.mutedForeground, width: 50, textAlign: "right" },
+    commentsSection: { gap: 12, paddingTop: 4 },
     commentsSectionHeader: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 6,
-      paddingBottom: 4,
-      borderBottomWidth: 1,
-      borderBottomColor: colors.border,
+      flexDirection: "row", alignItems: "center", gap: 6,
+      paddingBottom: 4, borderBottomWidth: 1, borderBottomColor: colors.border,
     },
-    commentsSectionTitle: {
-      fontSize: 14,
-      fontWeight: "700",
-      color: colors.foreground,
-    },
+    commentsSectionTitle: { fontSize: 14, fontWeight: "700", color: colors.foreground },
     noCommentsText: {
-      fontSize: 13,
-      color: colors.mutedForeground,
-      textAlign: "center",
-      paddingVertical: 12,
+      fontSize: 13, color: colors.mutedForeground,
+      textAlign: "center", paddingVertical: 12,
     },
-    commentItem: {
-      flexDirection: "row",
-      gap: 10,
-      alignItems: "flex-start",
-    },
+    commentItem: { flexDirection: "row", gap: 10, alignItems: "flex-start" },
     commentAvatar: {
-      width: 34,
-      height: 34,
-      borderRadius: 17,
+      width: 34, height: 34, borderRadius: 17,
       backgroundColor: colors.primary + "33",
-      alignItems: "center",
-      justifyContent: "center",
-      flexShrink: 0,
+      alignItems: "center", justifyContent: "center", flexShrink: 0,
     },
-    commentAvatarText: {
-      fontSize: 14,
-      fontWeight: "700",
-      color: colors.primary,
-    },
-    commentBody: {
-      flex: 1,
-      gap: 3,
-    },
-    commentMeta: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 8,
-    },
-    commentAuthor: {
-      fontSize: 13,
-      fontWeight: "700",
-      color: colors.foreground,
-    },
-    commentTime: {
-      fontSize: 11,
-      color: colors.mutedForeground,
-    },
-    commentText: {
-      fontSize: 14,
-      color: colors.foreground,
-      lineHeight: 20,
-    },
+    commentAvatarText: { fontSize: 14, fontWeight: "700", color: colors.primary },
+    commentBody: { flex: 1, gap: 3 },
+    commentMeta: { flexDirection: "row", alignItems: "center", gap: 8 },
+    commentAuthor: { fontSize: 13, fontWeight: "700", color: colors.foreground },
+    commentTime: { fontSize: 11, color: colors.mutedForeground },
+    commentText: { fontSize: 14, color: colors.foreground, lineHeight: 20 },
     inputBar: {
-      flexDirection: "row",
-      alignItems: "flex-end",
-      gap: 10,
-      paddingHorizontal: 16,
-      paddingTop: 10,
-      borderTopWidth: 1,
-      borderTopColor: colors.border,
+      flexDirection: "row", alignItems: "flex-end", gap: 10,
+      paddingHorizontal: 16, paddingTop: 10,
+      borderTopWidth: 1, borderTopColor: colors.border,
       backgroundColor: colors.background,
     },
     commentInput: {
-      flex: 1,
-      backgroundColor: colors.muted,
-      borderRadius: 20,
-      paddingHorizontal: 14,
-      paddingVertical: 10,
-      fontSize: 14,
-      color: colors.foreground,
-      borderWidth: 1,
-      borderColor: colors.border,
-      maxHeight: 100,
+      flex: 1, backgroundColor: colors.muted, borderRadius: 20,
+      paddingHorizontal: 14, paddingVertical: 10,
+      fontSize: 14, color: colors.foreground,
+      borderWidth: 1, borderColor: colors.border, maxHeight: 100,
     },
     sendBtn: {
-      width: 40,
-      height: 40,
-      borderRadius: 20,
-      backgroundColor: colors.primary,
-      alignItems: "center",
-      justifyContent: "center",
-      flexShrink: 0,
+      width: 40, height: 40, borderRadius: 20, backgroundColor: colors.primary,
+      alignItems: "center", justifyContent: "center", flexShrink: 0,
     },
     breakdownBody: { gap: 16 },
     breakdownGroup: { gap: 8 },
     breakdownGroupLabel: {
-      fontSize: 12, fontWeight: "700",
-      color: colors.mutedForeground,
+      fontSize: 12, fontWeight: "700", color: colors.mutedForeground,
       textTransform: "uppercase", letterSpacing: 0.6,
     },
     breakdownRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-    breakdownKey: {
-      fontSize: 12, color: colors.foreground,
-      width: 90, fontWeight: "500",
-    },
+    breakdownKey: { fontSize: 12, color: colors.foreground, width: 90, fontWeight: "500" },
     breakdownBarWrap: { flex: 1, flexDirection: "row", alignItems: "center", gap: 6 },
     breakdownBarBg: {
       flex: 1, height: 6, borderRadius: 3,

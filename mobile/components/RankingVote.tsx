@@ -1,19 +1,13 @@
 import { Icon } from "@/components/Icon";
 import * as Haptics from "expo-haptics";
-import React, { useState } from "react";
-import {
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import React, { useMemo, useState } from "react";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useColors } from "@/hooks/useColors";
 import type { RankingOption } from "@/context/AppContext";
 
 interface Props {
   options: RankingOption[];
-  value?: string[]; // ordered ids
+  value?: string[];
   onChange?: (ordered: string[]) => void;
   readonly?: boolean;
   rankingVotes?: Record<string, number[]>;
@@ -31,6 +25,15 @@ export default function RankingVote({
     value ?? options.map((o) => o.id)
   );
 
+  // Memoize styles — was being recreated on every render (once per list item)
+  const s = useMemo(() => styles(colors), [colors]);
+
+  // Build an id→option lookup to avoid find() inside map
+  const optionMap = useMemo(
+    () => new Map(options.map((o) => [o.id, o])),
+    [options]
+  );
+
   function move(id: string, dir: "up" | "down") {
     const idx = ordered.indexOf(id);
     if (dir === "up" && idx === 0) return;
@@ -43,72 +46,83 @@ export default function RankingVote({
     onChange?.(newOrder);
   }
 
-  function getAvgRank(optId: string) {
+  function getAvgRank(optId: string): string | null {
     const votes = rankingVotes?.[optId];
     if (!votes || votes.length === 0) return null;
     return (votes.reduce((a, b) => a + b, 0) / votes.length).toFixed(1);
   }
 
-  const displayOptions = readonly
-    ? options.slice().sort((a, b) => {
+  const displayOptions = useMemo(() => {
+    if (readonly) {
+      return options.slice().sort((a, b) => {
         const ar = rankingVotes?.[a.id];
         const br = rankingVotes?.[b.id];
-        const avgA = ar ? ar.reduce((x, y) => x + y, 0) / ar.length : 999;
-        const avgB = br ? br.reduce((x, y) => x + y, 0) / br.length : 999;
+        const avgA = ar && ar.length ? ar.reduce((x, y) => x + y, 0) / ar.length : 999;
+        const avgB = br && br.length ? br.reduce((x, y) => x + y, 0) / br.length : 999;
         return avgA - avgB;
-      })
-    : ordered.map((id) => options.find((o) => o.id === id)!).filter(Boolean);
+      });
+    }
+    // Use the lookup map — no non-null assertion or crash risk
+    return ordered.reduce<RankingOption[]>((acc, id) => {
+      const opt = optionMap.get(id);
+      if (opt) acc.push(opt);
+      return acc;
+    }, []);
+  }, [readonly, ordered, options, rankingVotes, optionMap]);
 
   return (
-    <View style={styles(colors).container}>
+    <View style={s.container}>
       {displayOptions.map((opt, idx) => {
         const avg = getAvgRank(opt.id);
+        const isFirst = idx === 0;
+        const isLast = idx === displayOptions.length - 1;
+
         return (
-          <View key={opt.id} style={styles(colors).row}>
-            <View style={styles(colors).rankBadge}>
-              <Text style={styles(colors).rankNum}>{idx + 1}</Text>
+          <View key={opt.id} style={s.row}>
+            <View style={s.rankBadge}>
+              <Text style={s.rankNum}>{idx + 1}</Text>
             </View>
-            <Text style={styles(colors).label} numberOfLines={1}>
+
+            <Text style={s.label} numberOfLines={1}>
               {opt.label}
             </Text>
+
             {readonly && avg !== null && (
-              <Text style={styles(colors).avg}>avg #{avg}</Text>
+              <Text style={s.avg}>avg #{avg}</Text>
             )}
+
             {!readonly && (
-              <View style={styles(colors).controls}>
+              <View style={s.controls}>
                 <Pressable
                   onPress={() => move(opt.id, "up")}
                   style={({ pressed }) => [
-                    styles(colors).btn,
-                    pressed && { opacity: 0.5 },
-                    idx === 0 && styles(colors).btnDisabled,
+                    s.btn,
+                    isFirst && s.btnDisabled,
+                    pressed && !isFirst && { opacity: 0.5 },
                   ]}
-                  disabled={idx === 0}
+                  disabled={isFirst}
+                  hitSlop={4}
                 >
                   <Icon
                     name="chevron-up"
                     size={16}
-                    color={idx === 0 ? colors.border : colors.primary}
+                    color={isFirst ? colors.border : colors.primary}
                   />
                 </Pressable>
                 <Pressable
                   onPress={() => move(opt.id, "down")}
                   style={({ pressed }) => [
-                    styles(colors).btn,
-                    pressed && { opacity: 0.5 },
-                    idx === displayOptions.length - 1 &&
-                      styles(colors).btnDisabled,
+                    s.btn,
+                    isLast && s.btnDisabled,
+                    pressed && !isLast && { opacity: 0.5 },
                   ]}
-                  disabled={idx === displayOptions.length - 1}
+                  disabled={isLast}
+                  hitSlop={4}
                 >
                   <Icon
                     name="chevron-down"
                     size={16}
-                    color={
-                      idx === displayOptions.length - 1
-                        ? colors.border
-                        : colors.primary
-                    }
+                    color={isLast ? colors.border : colors.primary}
                   />
                 </Pressable>
               </View>
@@ -140,25 +154,10 @@ const styles = (colors: ReturnType<typeof useColors>) =>
       alignItems: "center",
       justifyContent: "center",
     },
-    rankNum: {
-      fontSize: 13,
-      fontWeight: "700",
-      color: colors.primary,
-    },
-    label: {
-      flex: 1,
-      fontSize: 14,
-      fontWeight: "500",
-      color: colors.foreground,
-    },
-    avg: {
-      fontSize: 12,
-      color: colors.mutedForeground,
-    },
-    controls: {
-      flexDirection: "row",
-      gap: 4,
-    },
+    rankNum: { fontSize: 13, fontWeight: "700", color: colors.primary },
+    label: { flex: 1, fontSize: 14, fontWeight: "500", color: colors.foreground },
+    avg: { fontSize: 12, color: colors.mutedForeground },
+    controls: { flexDirection: "row", gap: 4 },
     btn: {
       width: 28,
       height: 28,

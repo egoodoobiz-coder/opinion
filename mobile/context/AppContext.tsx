@@ -54,6 +54,7 @@ export interface RankingOption {
 
 export interface Topic {
   id: string;
+  topicNumber: number;
   title: string;
   description: string;
   category: Category;
@@ -89,7 +90,7 @@ interface AppContextValue {
   userId: string;
   userDemographics: UserDemographics;
   addTopic: (
-    topic: Omit<Topic, "id" | "createdAt" | "yesCount" | "noCount" | "totalRating" | "ratingCount" | "rankingVotes" | "createdBy" | "comments" | "demoBreakdown">,
+    topic: Omit<Topic, "id" | "topicNumber" | "createdAt" | "yesCount" | "noCount" | "totalRating" | "ratingCount" | "rankingVotes" | "createdBy" | "comments" | "demoBreakdown">,
     premiumAccountType?: string
   ) => void;
   addComment: (topicId: string, text: string, authorId: string, authorName: string) => void;
@@ -109,6 +110,7 @@ const USER_KEY = "rankit_user";
 const SAMPLE_TOPICS: Topic[] = [
   {
     id: "1",
+    topicNumber: 1,
     title: "Is pineapple on pizza acceptable?",
     description: "The age-old debate. Share your honest opinion.",
     category: "food",
@@ -130,6 +132,7 @@ const SAMPLE_TOPICS: Topic[] = [
   },
   {
     id: "2",
+    topicNumber: 2,
     title: "Rank these streaming platforms",
     description: "Which do you actually use most?",
     category: "tech",
@@ -163,6 +166,7 @@ const SAMPLE_TOPICS: Topic[] = [
   },
   {
     id: "3",
+    topicNumber: 3,
     title: "Should remote work be the standard?",
     description: "Post-pandemic, is remote-first the right move for companies?",
     category: "lifestyle",
@@ -185,6 +189,7 @@ const SAMPLE_TOPICS: Topic[] = [
   },
   {
     id: "4",
+    topicNumber: 4,
     title: "Best programming languages to learn in 2025",
     description: "For career, for fun, or both?",
     category: "tech",
@@ -213,6 +218,7 @@ const SAMPLE_TOPICS: Topic[] = [
   },
   {
     id: "5",
+    topicNumber: 5,
     title: "Is chess a sport?",
     description: "Should mental games be classified as sports?",
     category: "sports",
@@ -229,6 +235,7 @@ const SAMPLE_TOPICS: Topic[] = [
   },
   {
     id: "6",
+    topicNumber: 6,
     title: "Rate this garage: City Motors",
     description: "Have you visited City Motors? Tell us what you think about each aspect of their service.",
     category: "automobiles",
@@ -306,23 +313,43 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         setUserId(uid);
 
         if (topicsRaw) {
-          const parsed = JSON.parse(topicsRaw);
-          const migrated = parsed.map((t: any) => ({
-            ...t,
-            comments: t.comments ?? [],
-            aspectVotes: t.aspectVotes ?? {},
-            aspects: t.aspects ?? undefined,
-            demoBreakdown: t.demoBreakdown ?? {},
-            targetDemographics: t.targetDemographics ?? undefined,
-          }));
-          setTopics(migrated);
+          try {
+            const parsed = JSON.parse(topicsRaw);
+            const migrated = parsed.map((t: any) => ({
+              ...t,
+              comments: t.comments ?? [],
+              aspectVotes: t.aspectVotes ?? {},
+              aspects: t.aspects ?? undefined,
+              demoBreakdown: t.demoBreakdown ?? {},
+              targetDemographics: t.targetDemographics ?? undefined,
+            }));
+            const needsNumbering = migrated.some((t: any) => !t.topicNumber);
+            if (needsNumbering) {
+              const sorted = [...migrated].sort((a: any, b: any) => a.createdAt - b.createdAt);
+              let counter = 1;
+              const numMap: Record<string, number> = {};
+              for (const t of sorted) numMap[t.id] = t.topicNumber ?? counter++;
+              const numbered = migrated.map((t: any) => ({ ...t, topicNumber: numMap[t.id] }));
+              setTopics(numbered);
+              await AsyncStorage.setItem(TOPICS_KEY, JSON.stringify(numbered));
+            } else {
+              setTopics(migrated);
+            }
+          } catch {
+            setTopics(SAMPLE_TOPICS);
+            await AsyncStorage.setItem(TOPICS_KEY, JSON.stringify(SAMPLE_TOPICS));
+          }
         } else {
           setTopics(SAMPLE_TOPICS);
           await AsyncStorage.setItem(TOPICS_KEY, JSON.stringify(SAMPLE_TOPICS));
         }
 
         if (votesRaw) {
-          setUserVotes(JSON.parse(votesRaw));
+          try {
+            setUserVotes(JSON.parse(votesRaw));
+          } catch {
+            await AsyncStorage.removeItem(VOTES_KEY);
+          }
         }
       } catch (e) {
         setTopics(SAMPLE_TOPICS);
@@ -344,13 +371,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const addTopic = useCallback(
     (
-      topic: Omit<Topic, "id" | "createdAt" | "yesCount" | "noCount" | "totalRating" | "ratingCount" | "rankingVotes" | "createdBy" | "comments" | "demoBreakdown">,
+      topic: Omit<Topic, "id" | "topicNumber" | "createdAt" | "yesCount" | "noCount" | "totalRating" | "ratingCount" | "rankingVotes" | "createdBy" | "comments" | "demoBreakdown">,
       premiumAccountType?: string
     ) => {
       const effectiveUserId = clerkUserId ?? userId;
+      const nextNumber = topics.reduce((max, t) => Math.max(max, t.topicNumber ?? 0), 0) + 1;
       const newTopic: any = {
         ...topic,
         id: generateId(),
+        topicNumber: nextNumber,
         createdAt: Date.now(),
         createdBy: effectiveUserId,
         yesCount: 0,

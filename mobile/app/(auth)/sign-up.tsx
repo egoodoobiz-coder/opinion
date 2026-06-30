@@ -6,6 +6,7 @@ import * as WebBrowser from "expo-web-browser";
 import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Platform,
   Pressable,
   ScrollView,
@@ -29,6 +30,20 @@ function useWarmUpBrowser() {
   }, []);
 }
 
+/** Maps Clerk error codes to user-friendly messages */
+function clerkMessage(err: any): string {
+  const code = err?.errors?.[0]?.code ?? err?.code ?? "";
+  const msg = err?.errors?.[0]?.message ?? err?.message ?? "";
+  if (code === "form_identifier_exists") return "An account with this email already exists.";
+  if (code === "form_password_pwned") return "This password has been found in a data breach. Please choose a different one.";
+  if (code === "form_password_length_too_short") return "Password must be at least 8 characters.";
+  if (code === "too_many_requests") return "Too many attempts. Please wait a moment.";
+  if (code === "network_error" || err?.name === "TypeError") return "Network error. Check your connection.";
+  if (code === "form_code_incorrect") return "Incorrect code. Please try again.";
+  if (code === "verification_expired") return "Code expired. Request a new one.";
+  return msg || "Something went wrong. Please try again.";
+}
+
 export default function SignUpScreen() {
   useWarmUpBrowser();
   const colors = useColors();
@@ -41,29 +56,61 @@ export default function SignUpScreen() {
   const [password, setPassword] = useState("");
   const [code, setCode] = useState("");
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  function clearError() {
+    if (errorMsg) setErrorMsg(null);
+  }
 
   const handleSignUp = async () => {
+    setErrorMsg(null);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    const { error } = await signUp.password({ emailAddress: email, password });
-    if (error) return;
-    await signUp.verifications.sendEmailCode();
+    try {
+      const { error } = await signUp.password({ emailAddress: email, password });
+      if (error) {
+        setErrorMsg(clerkMessage(error));
+        return;
+      }
+      await signUp.verifications.sendEmailCode();
+    } catch (err: any) {
+      setErrorMsg(clerkMessage(err));
+    }
   };
 
   const handleVerify = async () => {
-    await signUp.verifications.verifyEmailCode({ code });
-    if (signUp.status === "complete") {
-      await signUp.finalize({
-        navigate: ({ decorateUrl }) => {
-          const url = decorateUrl("/");
-          if (!url.startsWith("http")) {
-            router.replace("/(tabs)" as Href);
-          }
-        },
-      });
+    setErrorMsg(null);
+    try {
+      const { error } = await signUp.verifications.verifyEmailCode({ code });
+      if (error) {
+        setErrorMsg(clerkMessage(error));
+        return;
+      }
+      if (signUp.status === "complete") {
+        await signUp.finalize({
+          navigate: ({ decorateUrl }) => {
+            const url = decorateUrl("/");
+            if (!url.startsWith("http")) {
+              router.replace("/(tabs)" as Href);
+            }
+          },
+        });
+      }
+    } catch (err: any) {
+      setErrorMsg(clerkMessage(err));
+    }
+  };
+
+  const handleResendCode = async () => {
+    try {
+      await signUp.verifications.sendEmailCode();
+      Alert.alert("Code sent", "A new verification code has been sent to your email.");
+    } catch (err: any) {
+      Alert.alert("Error", clerkMessage(err));
     }
   };
 
   const handleGoogle = useCallback(async () => {
+    setErrorMsg(null);
     try {
       setGoogleLoading(true);
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -79,8 +126,11 @@ export default function SignUpScreen() {
           },
         });
       }
-    } catch (err) {
-      console.error(err);
+    } catch (err: any) {
+      const msg = clerkMessage(err);
+      if (!msg.toLowerCase().includes("cancel")) {
+        setErrorMsg(msg);
+      }
     } finally {
       setGoogleLoading(false);
     }
@@ -88,35 +138,49 @@ export default function SignUpScreen() {
 
   const s = styles(colors, insets);
 
-  // Email verification step
+  // ── Email verification step ──────────────────────────────────────────────
   if (
     signUp.status === "missing_requirements" &&
     signUp.unverifiedFields.includes("email_address") &&
     signUp.missingFields.length === 0
   ) {
     return (
-      <View style={[s.container, { paddingTop: Platform.OS === "web" ? 80 : insets.top + 60 }]}>
+      <View
+        style={[
+          s.container,
+          { paddingTop: Platform.OS === "web" ? 80 : insets.top + 60 },
+        ]}
+      >
         <Text style={s.logoText}>Opinion</Text>
         <Text style={s.title}>Check your email</Text>
-        <Text style={s.subtitle}>
-          We sent a verification code to {email}
-        </Text>
+        <Text style={s.subtitle}>We sent a verification code to {email}</Text>
+
         <ThemedInput
           style={s.input}
           placeholder="6-digit code"
           placeholderTextColor={colors.mutedForeground}
           value={code}
-          onChangeText={setCode}
+          onChangeText={(t) => { setCode(t); clearError(); }}
           keyboardType="numeric"
           autoFocus
+          maxLength={6}
+          returnKeyType="done"
+          onSubmitEditing={handleVerify}
         />
+
         {errors?.fields?.code && (
           <Text style={s.error}>{errors.fields.code.message}</Text>
         )}
+        {errorMsg && <Text style={s.error}>{errorMsg}</Text>}
+
         <Pressable
-          style={({ pressed }) => [s.btn, pressed && { opacity: 0.8 }]}
+          style={({ pressed }) => [
+            s.btn,
+            (!code || fetchStatus === "fetching") && s.btnDisabled,
+            pressed && { opacity: 0.8 },
+          ]}
           onPress={handleVerify}
-          disabled={fetchStatus === "fetching"}
+          disabled={!code || fetchStatus === "fetching"}
         >
           {fetchStatus === "fetching" ? (
             <ActivityIndicator color={colors.primaryForeground} />
@@ -124,14 +188,17 @@ export default function SignUpScreen() {
             <Text style={s.btnText}>Verify Email</Text>
           )}
         </Pressable>
-        <Pressable onPress={() => signUp.verifications.sendEmailCode()}>
+
+        <Pressable onPress={handleResendCode}>
           <Text style={[s.link, { textAlign: "center" }]}>Resend code</Text>
         </Pressable>
+
         <View nativeID="clerk-captcha" />
       </View>
     );
   }
 
+  // ── Main sign-up form ────────────────────────────────────────────────────
   return (
     <ScrollView
       contentContainerStyle={[
@@ -144,6 +211,7 @@ export default function SignUpScreen() {
       <Text style={s.title}>Create an account</Text>
       <Text style={s.subtitle}>Join and start sharing opinions</Text>
 
+      {/* Google SSO */}
       <Pressable
         style={({ pressed }) => [
           s.googleBtn,
@@ -163,6 +231,12 @@ export default function SignUpScreen() {
         )}
       </Pressable>
 
+      {errorMsg && !fetchStatus && (
+        <Text style={[s.error, { marginTop: -8, marginBottom: 12 }]}>
+          {errorMsg}
+        </Text>
+      )}
+
       <View style={s.divider}>
         <View style={s.dividerLine} />
         <Text style={s.dividerText}>or</Text>
@@ -175,10 +249,11 @@ export default function SignUpScreen() {
         placeholder="you@company.com"
         placeholderTextColor={colors.mutedForeground}
         value={email}
-        onChangeText={setEmail}
+        onChangeText={(t) => { setEmail(t); clearError(); }}
         autoCapitalize="none"
         keyboardType="email-address"
         autoComplete="email"
+        returnKeyType="next"
       />
       {errors?.fields?.emailAddress && (
         <Text style={s.error}>{errors.fields.emailAddress.message}</Text>
@@ -190,12 +265,18 @@ export default function SignUpScreen() {
         placeholder="Create a strong password"
         placeholderTextColor={colors.mutedForeground}
         value={password}
-        onChangeText={setPassword}
+        onChangeText={(t) => { setPassword(t); clearError(); }}
         secureTextEntry
         autoComplete="new-password"
+        returnKeyType="done"
+        onSubmitEditing={handleSignUp}
       />
       {errors?.fields?.password && (
         <Text style={s.error}>{errors.fields.password.message}</Text>
+      )}
+
+      {errorMsg && fetchStatus !== "fetching" && (
+        <Text style={[s.error, { marginBottom: 8 }]}>{errorMsg}</Text>
       )}
 
       <Pressable
@@ -263,16 +344,8 @@ const styles = (colors: ReturnType<typeof useColors>, insets: any) =>
       paddingVertical: 14,
       marginBottom: 20,
     },
-    googleIcon: {
-      fontSize: 18,
-      fontWeight: "800",
-      color: "#4285F4",
-    },
-    googleText: {
-      fontSize: 15,
-      fontWeight: "600",
-      color: colors.foreground,
-    },
+    googleIcon: { fontSize: 18, fontWeight: "800", color: "#4285F4" },
+    googleText: { fontSize: 15, fontWeight: "600", color: colors.foreground },
     divider: {
       flexDirection: "row",
       alignItems: "center",
@@ -306,11 +379,7 @@ const styles = (colors: ReturnType<typeof useColors>, insets: any) =>
       marginBottom: 20,
     },
     btnDisabled: { opacity: 0.4 },
-    btnText: {
-      fontSize: 16,
-      fontWeight: "700",
-      color: colors.primaryForeground,
-    },
+    btnText: { fontSize: 16, fontWeight: "700", color: colors.primaryForeground },
     footer: {
       flexDirection: "row",
       justifyContent: "center",

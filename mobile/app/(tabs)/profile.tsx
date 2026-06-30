@@ -2,7 +2,7 @@ import { useAuth, useUser } from "@clerk/expo";
 import { Icon } from "@/components/Icon";
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -23,6 +23,13 @@ import type { VotingType } from "@/context/AppContext";
 
 type AccountType = "regular" | "company" | "celebrity";
 
+const VOTE_TYPE_LABELS: Record<VotingType, string> = {
+  yesno: "Yes/No",
+  rating: "Rating",
+  ranking: "Ranking",
+  aspects: "Aspects",
+};
+
 export default function ProfileScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -30,10 +37,10 @@ export default function ProfileScreen() {
   const { user } = useUser();
   const router = useRouter();
   const { topics, userVotes, userId } = useApp();
-  const [activeTab, setActiveTab] = useState<"topics" | "analytics">("topics");
 
   const isPremium = (user?.unsafeMetadata as any)?.isPremium === true;
-  const accountType: AccountType = (user?.unsafeMetadata as any)?.accountType ?? "regular";
+  const accountType: AccountType =
+    (user?.unsafeMetadata as any)?.accountType ?? "regular";
 
   const API_URL = process.env.EXPO_PUBLIC_API_URL ?? "";
 
@@ -41,60 +48,87 @@ export default function ProfileScreen() {
   const [showAdminModal, setShowAdminModal] = useState(false);
   const [adminCode, setAdminCode] = useState("");
   const [claimingAdmin, setClaimingAdmin] = useState(false);
+  const [apiUnavailable, setApiUnavailable] = useState(false);
 
   // Fetch admin status and check verification on mount
-  useEffect(() => {
+  const fetchStatus = useCallback(async () => {
     if (!isSignedIn || !user) return;
-    async function fetchStatus() {
-      try {
-        const token = await getToken();
-        const headers: Record<string, string> = {
-          Authorization: `Bearer ${token ?? ""}`,
-          "X-Clerk-User-Id": user?.id ?? "",
-        };
+    if (!API_URL) {
+      setApiUnavailable(true);
+      return;
+    }
+    try {
+      const token = await getToken();
+      const headers: Record<string, string> = {
+        Authorization: `Bearer ${token ?? ""}`,
+        "X-Clerk-User-Id": user?.id ?? "",
+      };
 
-        // Check admin status
-        const adminRes = await fetch(`${API_URL}/api/admin/is-admin`, { headers });
-        if (adminRes.ok) {
-          const adminData = await adminRes.json();
-          setIsAdmin(adminData.isAdmin === true);
-        }
+      // Check admin status
+      const adminRes = await fetch(`${API_URL}/api/admin/is-admin`, {
+        headers,
+      });
+      if (adminRes.ok) {
+        const adminData = await adminRes.json();
+        setIsAdmin(adminData.isAdmin === true);
+      }
 
-        // Auto-activate premium if verification approved
-        if (!isPremium) {
-          const verifyRes = await fetch(`${API_URL}/api/admin/verify-requests/me`, { headers });
-          if (verifyRes.ok) {
-            const verifyData = await verifyRes.json();
-            const approved = (verifyData.requests ?? []).find((r: any) => r.status === "approved");
-            if (approved) {
-              await user!.update({
-                unsafeMetadata: {
-                  ...(user!.unsafeMetadata as any),
-                  isPremium: true,
-                  accountType: approved.requestedAccountType,
-                },
-              });
-            }
+      // Auto-activate premium if verification approved
+      if (!isPremium) {
+        const verifyRes = await fetch(
+          `${API_URL}/api/admin/verify-requests/me`,
+          { headers }
+        );
+        if (verifyRes.ok) {
+          const verifyData = await verifyRes.json();
+          const approved = (verifyData.requests ?? []).find(
+            (r: any) => r.status === "approved"
+          );
+          if (approved) {
+            await user!.update({
+              unsafeMetadata: {
+                ...(user!.unsafeMetadata as any),
+                isPremium: true,
+                accountType: approved.requestedAccountType,
+              },
+            });
           }
         }
-      } catch {}
+      }
+    } catch {
+      setApiUnavailable(true);
     }
+  }, [isSignedIn, user?.id, isPremium, getToken, API_URL]);
+
+  useEffect(() => {
     fetchStatus();
-  }, [isSignedIn, user?.id]);
+  }, [fetchStatus]);
 
   async function handleAdminClaim() {
     if (!adminCode.trim() || !user) return;
+    if (!API_URL) {
+      Alert.alert(
+        "Unavailable",
+        "API server is not configured. Set EXPO_PUBLIC_API_URL to use admin features."
+      );
+      return;
+    }
     setClaimingAdmin(true);
     try {
       const token = await getToken();
       if (!token) {
-        Alert.alert("Session Error", "Could not get auth token. Please sign out and sign in again.");
+        Alert.alert(
+          "Session Error",
+          "Could not get auth token. Please sign out and sign in again."
+        );
         return;
       }
-      const url = `${API_URL}/api/admin/claim`;
-      const res = await fetch(url, {
+      const res = await fetch(`${API_URL}/api/admin/claim`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify({
           secret: adminCode.trim(),
           userEmail: user.emailAddresses?.[0]?.emailAddress,
@@ -102,7 +136,9 @@ export default function ProfileScreen() {
         }),
       });
       let data: any = {};
-      try { data = await res.json(); } catch {}
+      try {
+        data = await res.json();
+      } catch {}
       if (res.ok) {
         setIsAdmin(true);
         setShowAdminModal(false);
@@ -110,10 +146,16 @@ export default function ProfileScreen() {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         Alert.alert("Access Granted", "You are now the master admin.");
       } else {
-        Alert.alert("Failed", `Status ${res.status}: ${data.error ?? "Unknown error"}`);
+        Alert.alert(
+          "Failed",
+          `Status ${res.status}: ${data.error ?? "Unknown error"}`
+        );
       }
     } catch (e: any) {
-      Alert.alert("Network Error", e?.message ?? "Could not connect. Check your connection.");
+      Alert.alert(
+        "Network Error",
+        e?.message ?? "Could not connect. Check your connection."
+      );
     } finally {
       setClaimingAdmin(false);
     }
@@ -129,52 +171,62 @@ export default function ProfileScreen() {
     [topics, clerkUserId]
   );
 
-  const votedTopics = useMemo(
-    () =>
-      topics
-        .filter((t) => userVotes[t.id] && t.createdBy !== clerkUserId)
-        .sort((a, b) => b.createdAt - a.createdAt),
-    [topics, userVotes, clerkUserId]
-  );
-
   const totalVotes = Object.keys(userVotes).length;
-  const totalReceived = myTopics.reduce(
-    (sum, t) => sum + t.yesCount + t.noCount + t.ratingCount,
-    0
-  );
+  const totalReceived = myTopics.reduce((sum, t) => {
+    const base = t.yesCount + t.noCount + t.ratingCount;
+    const aspectTotal = t.aspectVotes
+      ? Object.values(t.aspectVotes).reduce((s, v) => s + v.up + v.down, 0)
+      : 0;
+    const rankingTotal = Object.values(t.rankingVotes ?? {}).reduce(
+      (s, arr) => s + arr.length,
+      0
+    );
+    return sum + base + aspectTotal + rankingTotal;
+  }, 0);
 
-  // Analytics data for premium
+  // Analytics data for premium users
   const analyticsData = useMemo(() => {
     if (!isPremium) return null;
+
     const byCategory = myTopics.reduce((acc, t) => {
       acc[t.category] = (acc[t.category] ?? 0) + 1;
       return acc;
     }, {} as Record<string, number>);
 
-    const topTopic = [...myTopics].sort(
-      (a, b) =>
-        b.yesCount + b.noCount + b.ratingCount - (a.yesCount + a.noCount + a.ratingCount)
-    )[0];
+    function topicEngagement(t: (typeof myTopics)[0]) {
+      const base = t.yesCount + t.noCount + t.ratingCount;
+      const aspectTotal = t.aspectVotes
+        ? Object.values(t.aspectVotes).reduce((s, v) => s + v.up + v.down, 0)
+        : 0;
+      const rankingTotal = Object.values(t.rankingVotes ?? {}).reduce(
+        (s, arr) => s + arr.length,
+        0
+      );
+      return base + aspectTotal + rankingTotal;
+    }
 
-    const voteTypeBreakdown = myTopics.reduce(
-      (acc, t) => {
-        acc[t.votingType] = (acc[t.votingType] ?? 0) + 1;
-        return acc;
-      },
-      {} as Record<string, number>
+    const topTopic =
+      myTopics.length > 0
+        ? [...myTopics].sort(
+            (a, b) => topicEngagement(b) - topicEngagement(a)
+          )[0]
+        : null;
+
+    const voteTypeBreakdown = myTopics.reduce((acc, t) => {
+      acc[t.votingType] = (acc[t.votingType] ?? 0) + 1;
+      return acc;
+    }, {} as Record<VotingType, number>);
+
+    const totalEngagement = myTopics.reduce(
+      (sum, t) => sum + topicEngagement(t),
+      0
     );
-
     const avgEngagement =
       myTopics.length > 0
-        ? (
-            myTopics.reduce(
-              (sum, t) => sum + t.yesCount + t.noCount + t.ratingCount,
-              0
-            ) / myTopics.length
-          ).toFixed(1)
+        ? (totalEngagement / myTopics.length).toFixed(1)
         : "0";
 
-    return { byCategory, topTopic, voteTypeBreakdown, avgEngagement };
+    return { byCategory, topTopic, voteTypeBreakdown, avgEngagement, topicEngagement };
   }, [myTopics, isPremium]);
 
   const s = styles(colors, insets);
@@ -190,7 +242,12 @@ export default function ProfileScreen() {
   if (!isSignedIn) {
     return (
       <View style={s.container}>
-        <View style={[s.header, { paddingTop: Platform.OS === "web" ? 16 : insets.top + 4 }]}>
+        <View
+          style={[
+            s.header,
+            { paddingTop: Platform.OS === "web" ? 16 : insets.top + 4 },
+          ]}
+        >
           <Text style={s.title}>Profile</Text>
         </View>
         <View style={s.signInPrompt}>
@@ -243,7 +300,17 @@ export default function ProfileScreen() {
           </Pressable>
         </View>
 
-        {/* User info */}
+        {/* API unavailable banner */}
+        {apiUnavailable && (
+          <View style={s.apiBanner}>
+            <Icon name="alert-circle" size={14} color={colors.star} />
+            <Text style={s.apiBannerText}>
+              Backend offline — admin & verification features unavailable
+            </Text>
+          </View>
+        )}
+
+        {/* User info card */}
         <Pressable
           style={({ pressed }) => [s.userCard, pressed && { opacity: 0.85 }]}
           onPress={() => {
@@ -256,7 +323,7 @@ export default function ProfileScreen() {
               <Text style={s.avatarText}>
                 {(
                   (user?.firstName?.[0] ?? "") +
-                  (user?.lastName?.[0] ?? "") ||
+                    (user?.lastName?.[0] ?? "") ||
                   (user?.emailAddresses?.[0]?.emailAddress ?? "U")[0]
                 ).toUpperCase()}
               </Text>
@@ -275,7 +342,14 @@ export default function ProfileScreen() {
                   "You"}
               </Text>
               {isPremium && (
-                <View style={[s.badge, accountType === "celebrity" ? s.badgeCelebrity : s.badgeCompany]}>
+                <View
+                  style={[
+                    s.badge,
+                    accountType === "celebrity"
+                      ? s.badgeCelebrity
+                      : s.badgeCompany,
+                  ]}
+                >
                   <Icon name="check-circle" size={11} color="#fff" />
                   <Text style={s.badgeText}>
                     {accountType === "celebrity" ? "Celebrity" : "Company"}
@@ -325,7 +399,7 @@ export default function ProfileScreen() {
           </Pressable>
         )}
 
-        {/* Premium upgrade */}
+        {/* Premium upgrade / verify */}
         {!isPremium && (
           <View style={s.premiumCard}>
             <View style={s.premiumHeader}>
@@ -333,10 +407,15 @@ export default function ProfileScreen() {
               <Text style={s.premiumTitle}>Get Verified</Text>
             </View>
             <Text style={s.premiumSubtitle}>
-              Apply for a verified badge as a Company or Celebrity account and unlock analytics
+              Apply for a verified badge as a Company or Celebrity account and
+              unlock analytics
             </Text>
             <Pressable
-              style={({ pressed }) => [s.upgradeBtn, s.upgradeBtnVerify, pressed && { opacity: 0.8 }]}
+              style={({ pressed }) => [
+                s.upgradeBtn,
+                s.upgradeBtnVerify,
+                pressed && { opacity: 0.8 },
+              ]}
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                 router.push("/verify-request");
@@ -358,7 +437,9 @@ export default function ProfileScreen() {
 
             <View style={s.analyticsGrid}>
               <View style={s.analyticsItem}>
-                <Text style={s.analyticsNum}>{analyticsData.avgEngagement}</Text>
+                <Text style={s.analyticsNum}>
+                  {analyticsData.avgEngagement}
+                </Text>
                 <Text style={s.analyticsLabel}>Avg engagement</Text>
               </View>
               <View style={s.analyticsItem}>
@@ -374,31 +455,44 @@ export default function ProfileScreen() {
                   {analyticsData.topTopic.title}
                 </Text>
                 <Text style={s.topTopicStats}>
-                  {(analyticsData.topTopic.yesCount + analyticsData.topTopic.noCount + analyticsData.topTopic.ratingCount).toLocaleString()} total engagements
+                  {analyticsData
+                    .topicEngagement(analyticsData.topTopic)
+                    .toLocaleString()}{" "}
+                  total engagements
                 </Text>
               </View>
             )}
 
-            <View style={s.voteBreakdown}>
-              <Text style={s.voteBreakdownLabel}>Vote types used</Text>
-              <View style={s.voteBreakdownRow}>
-                {Object.entries(analyticsData.voteTypeBreakdown).map(([vt, count]) => (
-                  <View key={vt} style={s.voteBreakdownItem}>
-                    <Text style={s.voteBreakdownNum}>{count}</Text>
-                    <Text style={s.voteBreakdownType}>
-                      {vt === "yesno" ? "Yes/No" : vt === "rating" ? "Rating" : "Ranking"}
-                    </Text>
-                  </View>
-                ))}
+            {Object.keys(analyticsData.voteTypeBreakdown).length > 0 && (
+              <View style={s.voteBreakdown}>
+                <Text style={s.voteBreakdownLabel}>Vote types used</Text>
+                <View style={s.voteBreakdownRow}>
+                  {(
+                    Object.entries(analyticsData.voteTypeBreakdown) as [
+                      VotingType,
+                      number
+                    ][]
+                  ).map(([vt, count]) => (
+                    <View key={vt} style={s.voteBreakdownItem}>
+                      <Text style={s.voteBreakdownNum}>{count}</Text>
+                      <Text style={s.voteBreakdownType}>
+                        {VOTE_TYPE_LABELS[vt] ?? vt}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
               </View>
-            </View>
+            )}
           </View>
         )}
 
-        {/* Subtle admin setup link */}
+        {/* Admin setup link — subtle, bottom of page */}
         {!isAdmin && (
           <Pressable
-            style={({ pressed }) => [s.adminSetupLink, pressed && { opacity: 0.5 }]}
+            style={({ pressed }) => [
+              s.adminSetupLink,
+              pressed && { opacity: 0.5 },
+            ]}
             onPress={() => setShowAdminModal(true)}
           >
             <Text style={s.adminSetupLinkText}>Admin setup</Text>
@@ -411,7 +505,10 @@ export default function ProfileScreen() {
         visible={showAdminModal}
         transparent
         animationType="fade"
-        onRequestClose={() => { setShowAdminModal(false); setAdminCode(""); }}
+        onRequestClose={() => {
+          setShowAdminModal(false);
+          setAdminCode("");
+        }}
       >
         <KeyboardAvoidingView
           style={s.modalOverlay}
@@ -419,7 +516,10 @@ export default function ProfileScreen() {
         >
           <Pressable
             style={s.modalBackdrop}
-            onPress={() => { setShowAdminModal(false); setAdminCode(""); }}
+            onPress={() => {
+              setShowAdminModal(false);
+              setAdminCode("");
+            }}
           />
           <View style={s.modalCard}>
             <View style={s.modalHeader}>
@@ -442,8 +542,14 @@ export default function ProfileScreen() {
             />
             <View style={s.modalActions}>
               <Pressable
-                style={({ pressed }) => [s.modalCancelBtn, pressed && { opacity: 0.7 }]}
-                onPress={() => { setShowAdminModal(false); setAdminCode(""); }}
+                style={({ pressed }) => [
+                  s.modalCancelBtn,
+                  pressed && { opacity: 0.7 },
+                ]}
+                onPress={() => {
+                  setShowAdminModal(false);
+                  setAdminCode("");
+                }}
               >
                 <Text style={s.modalCancelText}>Cancel</Text>
               </Pressable>
@@ -497,6 +603,25 @@ const styles = (colors: ReturnType<typeof useColors>, insets: any) =>
       alignItems: "center",
       justifyContent: "center",
     },
+    apiBanner: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+      marginHorizontal: 16,
+      marginTop: 12,
+      marginBottom: 4,
+      backgroundColor: colors.star + "22",
+      borderRadius: 10,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderWidth: 1,
+      borderColor: colors.star + "44",
+    },
+    apiBannerText: {
+      fontSize: 12,
+      color: colors.star,
+      flex: 1,
+    },
     userCard: {
       flexDirection: "row",
       alignItems: "center",
@@ -544,7 +669,12 @@ const styles = (colors: ReturnType<typeof useColors>, insets: any) =>
       alignItems: "center",
       justifyContent: "center",
     },
-    nameRow: { flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" },
+    nameRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      flexWrap: "wrap",
+    },
     userName: {
       fontSize: 16,
       fontWeight: "700",
@@ -607,7 +737,11 @@ const styles = (colors: ReturnType<typeof useColors>, insets: any) =>
     },
     premiumHeader: { flexDirection: "row", alignItems: "center", gap: 8 },
     premiumTitle: { fontSize: 16, fontWeight: "800", color: colors.star },
-    premiumSubtitle: { fontSize: 13, color: colors.mutedForeground, lineHeight: 18 },
+    premiumSubtitle: {
+      fontSize: 13,
+      color: colors.mutedForeground,
+      lineHeight: 18,
+    },
     upgradeBtn: {
       flexDirection: "row",
       alignItems: "center",
@@ -641,7 +775,11 @@ const styles = (colors: ReturnType<typeof useColors>, insets: any) =>
       gap: 4,
     },
     analyticsNum: { fontSize: 22, fontWeight: "800", color: colors.primary },
-    analyticsLabel: { fontSize: 11, color: colors.mutedForeground, textAlign: "center" },
+    analyticsLabel: {
+      fontSize: 11,
+      color: colors.mutedForeground,
+      textAlign: "center",
+    },
     topTopicBlock: {
       backgroundColor: colors.muted,
       borderRadius: 12,
@@ -665,9 +803,10 @@ const styles = (colors: ReturnType<typeof useColors>, insets: any) =>
       textTransform: "uppercase",
       letterSpacing: 0.5,
     },
-    voteBreakdownRow: { flexDirection: "row", gap: 8 },
+    voteBreakdownRow: { flexDirection: "row", gap: 8, flexWrap: "wrap" },
     voteBreakdownItem: {
       flex: 1,
+      minWidth: 60,
       backgroundColor: colors.muted,
       borderRadius: 10,
       padding: 10,
@@ -675,15 +814,10 @@ const styles = (colors: ReturnType<typeof useColors>, insets: any) =>
       gap: 2,
     },
     voteBreakdownNum: { fontSize: 18, fontWeight: "800", color: colors.accent },
-    voteBreakdownType: { fontSize: 10, color: colors.mutedForeground, textAlign: "center" },
-    section: { paddingHorizontal: 16, marginBottom: 8 },
-    sectionTitle: {
-      fontSize: 13,
-      fontWeight: "700",
+    voteBreakdownType: {
+      fontSize: 10,
       color: colors.mutedForeground,
-      textTransform: "uppercase",
-      letterSpacing: 0.8,
-      marginBottom: 10,
+      textAlign: "center",
     },
     signInPrompt: {
       flex: 1,
@@ -712,7 +846,11 @@ const styles = (colors: ReturnType<typeof useColors>, insets: any) =>
       alignItems: "center",
       marginTop: 8,
     },
-    signInBtnText: { fontSize: 16, fontWeight: "700", color: colors.primaryForeground },
+    signInBtnText: {
+      fontSize: 16,
+      fontWeight: "700",
+      color: colors.primaryForeground,
+    },
     signUpBtn: {
       width: "100%",
       backgroundColor: colors.muted,
@@ -722,10 +860,11 @@ const styles = (colors: ReturnType<typeof useColors>, insets: any) =>
       borderWidth: 1,
       borderColor: colors.border,
     },
-    signUpBtnText: { fontSize: 16, fontWeight: "600", color: colors.foreground },
-    empty: { alignItems: "center", paddingTop: 40, gap: 8, paddingHorizontal: 16 },
-    emptyText: { fontSize: 18, fontWeight: "700", color: colors.mutedForeground },
-    emptySubtext: { fontSize: 14, color: colors.mutedForeground, textAlign: "center" },
+    signUpBtnText: {
+      fontSize: 16,
+      fontWeight: "600",
+      color: colors.foreground,
+    },
     adminSetupLink: {
       alignSelf: "center",
       paddingVertical: 12,
@@ -737,7 +876,6 @@ const styles = (colors: ReturnType<typeof useColors>, insets: any) =>
       fontSize: 12,
       color: colors.border,
     },
-    // Modal styles
     modalOverlay: {
       flex: 1,
       justifyContent: "center",
@@ -746,7 +884,10 @@ const styles = (colors: ReturnType<typeof useColors>, insets: any) =>
     },
     modalBackdrop: {
       position: "absolute",
-      top: 0, left: 0, right: 0, bottom: 0,
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
       backgroundColor: "rgba(0,0,0,0.75)",
     },
     modalCard: {
@@ -760,7 +901,11 @@ const styles = (colors: ReturnType<typeof useColors>, insets: any) =>
     },
     modalHeader: { flexDirection: "row", alignItems: "center", gap: 10 },
     modalTitle: { fontSize: 18, fontWeight: "800", color: colors.foreground },
-    modalSubtitle: { fontSize: 13, color: colors.mutedForeground, lineHeight: 19 },
+    modalSubtitle: {
+      fontSize: 13,
+      color: colors.mutedForeground,
+      lineHeight: 19,
+    },
     modalInput: {
       backgroundColor: colors.muted,
       borderRadius: 12,
@@ -779,7 +924,11 @@ const styles = (colors: ReturnType<typeof useColors>, insets: any) =>
       paddingVertical: 14,
       alignItems: "center",
     },
-    modalCancelText: { fontSize: 15, fontWeight: "600", color: colors.mutedForeground },
+    modalCancelText: {
+      fontSize: 15,
+      fontWeight: "600",
+      color: colors.mutedForeground,
+    },
     modalConfirmBtn: {
       flex: 1,
       backgroundColor: colors.primary,

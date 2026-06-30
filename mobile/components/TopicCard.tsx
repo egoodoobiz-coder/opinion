@@ -74,6 +74,7 @@ export default function TopicCard({ topic, userVoted }: Props) {
     >
       <View style={s.header}>
         <View style={s.headerLeft}>
+          <Text style={s.postNumber}>#{topic.topicNumber}</Text>
           <View style={[s.catBadge, { backgroundColor: cat.color + "22" }]}>
             <Icon name={cat.icon as any} size={12} color={cat.color} />
             <Text style={[s.catLabel, { color: cat.color }]}>{cat.label}</Text>
@@ -202,6 +203,11 @@ export default function TopicCard({ topic, userVoted }: Props) {
           <Text style={s.pillLabel}>{topic.comments.length}</Text>
         </View>
       </View>
+
+      <View style={s.footer}>
+        <Icon name="calendar" size={10} color={colors.mutedForeground} />
+        <Text style={s.footerDate}>{formatDateTime(topic.createdAt)}</Text>
+      </View>
     </Pressable>
   );
 }
@@ -212,6 +218,14 @@ function formatTime(ts: number) {
   if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
   if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
   return `${Math.floor(diff / 86400000)}d ago`;
+}
+
+const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+function formatDateTime(ts: number) {
+  const d = new Date(ts);
+  const hh = d.getHours().toString().padStart(2, "0");
+  const mm = d.getMinutes().toString().padStart(2, "0");
+  return `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}, ${hh}:${mm}`;
 }
 
 const styles = (colors: ReturnType<typeof useColors>) =>
@@ -312,7 +326,23 @@ const styles = (colors: ReturnType<typeof useColors>) =>
     aspectPreviewFill: { height: "100%", borderRadius: 2, backgroundColor: colors.yes },
     aspectPreviewPct: { fontSize: 10, color: colors.mutedForeground, width: 26, textAlign: "right" },
     aspectPreviewNone: { fontSize: 10, color: colors.mutedForeground },
+    postNumber: {
+      fontSize: 11,
+      fontWeight: "700",
+      color: colors.mutedForeground,
+      letterSpacing: 0.3,
+    },
     voteTypePills: { flexDirection: "row", gap: 6, flexWrap: "wrap" },
+    footer: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
+      marginTop: 8,
+      paddingTop: 8,
+      borderTopWidth: 1,
+      borderTopColor: colors.border,
+    },
+    footerDate: { fontSize: 10, color: colors.mutedForeground },
     pill: {
       flexDirection: "row",
       alignItems: "center",

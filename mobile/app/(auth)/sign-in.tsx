@@ -6,6 +6,7 @@ import * as WebBrowser from "expo-web-browser";
 import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Platform,
   Pressable,
   ScrollView,
@@ -29,6 +30,17 @@ function useWarmUpBrowser() {
   }, []);
 }
 
+/** Maps Clerk error codes to user-friendly messages */
+function clerkMessage(err: any): string {
+  const code = err?.errors?.[0]?.code ?? err?.code ?? "";
+  const msg = err?.errors?.[0]?.message ?? err?.message ?? "";
+  if (code === "form_password_incorrect") return "Incorrect password. Please try again.";
+  if (code === "form_identifier_not_found") return "No account found with that email.";
+  if (code === "too_many_requests") return "Too many attempts. Please wait a moment.";
+  if (code === "network_error" || err?.name === "TypeError") return "Network error. Check your connection.";
+  return msg || "Something went wrong. Please try again.";
+}
+
 export default function SignInScreen() {
   useWarmUpBrowser();
   const colors = useColors();
@@ -41,38 +53,64 @@ export default function SignInScreen() {
   const [password, setPassword] = useState("");
   const [verifyCode, setVerifyCode] = useState("");
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // Clear inline error when user starts editing
+  function clearError() {
+    if (errorMsg) setErrorMsg(null);
+  }
 
   const handleEmailSignIn = async () => {
+    setErrorMsg(null);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    const { error } = await signIn.password({ emailAddress: email, password });
-    if (error) return;
-
-    if (signIn.status === "complete") {
-      await signIn.finalize({
-        navigate: ({ decorateUrl }) => {
-          const url = decorateUrl("/");
-          if (url.startsWith("http")) {
-            // handled externally
-          } else {
-            router.replace("/(tabs)" as Href);
-          }
-        },
-      });
+    try {
+      const { error } = await signIn.password({ emailAddress: email, password });
+      if (error) {
+        setErrorMsg(clerkMessage(error));
+        return;
+      }
+      if (signIn.status === "complete") {
+        await signIn.finalize({
+          navigate: ({ decorateUrl }) => {
+            const url = decorateUrl("/");
+            if (!url.startsWith("http")) {
+              router.replace("/(tabs)" as Href);
+            }
+          },
+        });
+      }
+    } catch (err: any) {
+      setErrorMsg(clerkMessage(err));
     }
   };
 
   const handleVerify = async () => {
-    await signIn.mfa.verifyEmailCode({ code: verifyCode });
-    if (signIn.status === "complete") {
-      await signIn.finalize({
-        navigate: () => {
-          router.replace("/(tabs)" as Href);
-        },
-      });
+    setErrorMsg(null);
+    try {
+      await signIn.mfa.verifyEmailCode({ code: verifyCode });
+      if (signIn.status === "complete") {
+        await signIn.finalize({
+          navigate: () => {
+            router.replace("/(tabs)" as Href);
+          },
+        });
+      }
+    } catch (err: any) {
+      setErrorMsg(clerkMessage(err));
+    }
+  };
+
+  const handleResendCode = async () => {
+    try {
+      await signIn.mfa.sendEmailCode();
+      Alert.alert("Code sent", "A new verification code has been sent to your email.");
+    } catch (err: any) {
+      Alert.alert("Error", clerkMessage(err));
     }
   };
 
   const handleGoogle = useCallback(async () => {
+    setErrorMsg(null);
     try {
       setGoogleLoading(true);
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -88,8 +126,12 @@ export default function SignInScreen() {
           },
         });
       }
-    } catch (err) {
-      console.error(err);
+    } catch (err: any) {
+      // User cancelled — no error shown. Other errors shown inline.
+      const msg = clerkMessage(err);
+      if (!msg.toLowerCase().includes("cancel")) {
+        setErrorMsg(msg);
+      }
     } finally {
       setGoogleLoading(false);
     }
@@ -97,27 +139,46 @@ export default function SignInScreen() {
 
   const s = styles(colors, insets);
 
+  // ── MFA verification step ────────────────────────────────────────────────
   if (signIn.status === "needs_client_trust") {
     return (
-      <View style={s.container}>
+      <View
+        style={[
+          s.container,
+          { paddingTop: Platform.OS === "web" ? 80 : insets.top + 60 },
+        ]}
+      >
+        <Text style={s.logoText}>Opinion</Text>
         <Text style={s.title}>Verify your account</Text>
         <Text style={s.subtitle}>Enter the code sent to your email</Text>
+
         <ThemedInput
           style={s.input}
           placeholder="Verification code"
           placeholderTextColor={colors.mutedForeground}
           value={verifyCode}
-          onChangeText={setVerifyCode}
+          onChangeText={(t) => { setVerifyCode(t); clearError(); }}
           keyboardType="numeric"
           autoFocus
+          returnKeyType="done"
+          onSubmitEditing={handleVerify}
         />
+
+        {/* Clerk field errors */}
         {errors?.fields?.code && (
           <Text style={s.error}>{errors.fields.code.message}</Text>
         )}
+        {/* Caught errors */}
+        {errorMsg && <Text style={s.error}>{errorMsg}</Text>}
+
         <Pressable
-          style={({ pressed }) => [s.btn, pressed && { opacity: 0.8 }]}
+          style={({ pressed }) => [
+            s.btn,
+            (!verifyCode || fetchStatus === "fetching") && s.btnDisabled,
+            pressed && { opacity: 0.8 },
+          ]}
           onPress={handleVerify}
-          disabled={fetchStatus === "fetching"}
+          disabled={!verifyCode || fetchStatus === "fetching"}
         >
           {fetchStatus === "fetching" ? (
             <ActivityIndicator color={colors.primaryForeground} />
@@ -125,13 +186,15 @@ export default function SignInScreen() {
             <Text style={s.btnText}>Verify</Text>
           )}
         </Pressable>
-        <Pressable onPress={() => signIn.mfa.sendEmailCode()}>
-          <Text style={s.link}>Resend code</Text>
+
+        <Pressable onPress={handleResendCode}>
+          <Text style={[s.link, { textAlign: "center" }]}>Resend code</Text>
         </Pressable>
       </View>
     );
   }
 
+  // ── Main sign-in form ────────────────────────────────────────────────────
   return (
     <ScrollView
       contentContainerStyle={[
@@ -144,6 +207,7 @@ export default function SignInScreen() {
       <Text style={s.title}>Welcome back</Text>
       <Text style={s.subtitle}>Sign in to share your opinions</Text>
 
+      {/* Google SSO */}
       <Pressable
         style={({ pressed }) => [
           s.googleBtn,
@@ -163,6 +227,13 @@ export default function SignInScreen() {
         )}
       </Pressable>
 
+      {/* Google error shown inline (not modal) */}
+      {errorMsg && !fetchStatus && (
+        <Text style={[s.error, { marginTop: -8, marginBottom: 12 }]}>
+          {errorMsg}
+        </Text>
+      )}
+
       <View style={s.divider}>
         <View style={s.dividerLine} />
         <Text style={s.dividerText}>or</Text>
@@ -175,10 +246,11 @@ export default function SignInScreen() {
         placeholder="you@example.com"
         placeholderTextColor={colors.mutedForeground}
         value={email}
-        onChangeText={setEmail}
+        onChangeText={(t) => { setEmail(t); clearError(); }}
         autoCapitalize="none"
         keyboardType="email-address"
         autoComplete="email"
+        returnKeyType="next"
       />
       {errors?.fields?.identifier && (
         <Text style={s.error}>{errors.fields.identifier.message}</Text>
@@ -190,12 +262,19 @@ export default function SignInScreen() {
         placeholder="Your password"
         placeholderTextColor={colors.mutedForeground}
         value={password}
-        onChangeText={setPassword}
+        onChangeText={(t) => { setPassword(t); clearError(); }}
         secureTextEntry
         autoComplete="password"
+        returnKeyType="done"
+        onSubmitEditing={handleEmailSignIn}
       />
       {errors?.fields?.password && (
         <Text style={s.error}>{errors.fields.password.message}</Text>
+      )}
+
+      {/* Caught sign-in errors shown here */}
+      {errorMsg && fetchStatus !== "fetching" && (
+        <Text style={[s.error, { marginBottom: 8 }]}>{errorMsg}</Text>
       )}
 
       <Pressable
@@ -261,31 +340,16 @@ const styles = (colors: ReturnType<typeof useColors>, insets: any) =>
       paddingVertical: 14,
       marginBottom: 20,
     },
-    googleIcon: {
-      fontSize: 18,
-      fontWeight: "800",
-      color: "#4285F4",
-    },
-    googleText: {
-      fontSize: 15,
-      fontWeight: "600",
-      color: colors.foreground,
-    },
+    googleIcon: { fontSize: 18, fontWeight: "800", color: "#4285F4" },
+    googleText: { fontSize: 15, fontWeight: "600", color: colors.foreground },
     divider: {
       flexDirection: "row",
       alignItems: "center",
       gap: 12,
       marginBottom: 20,
     },
-    dividerLine: {
-      flex: 1,
-      height: 1,
-      backgroundColor: colors.border,
-    },
-    dividerText: {
-      fontSize: 13,
-      color: colors.mutedForeground,
-    },
+    dividerLine: { flex: 1, height: 1, backgroundColor: colors.border },
+    dividerText: { fontSize: 13, color: colors.mutedForeground },
     label: {
       fontSize: 13,
       fontWeight: "600",
@@ -311,25 +375,14 @@ const styles = (colors: ReturnType<typeof useColors>, insets: any) =>
       marginBottom: 20,
     },
     btnDisabled: { opacity: 0.4 },
-    btnText: {
-      fontSize: 16,
-      fontWeight: "700",
-      color: colors.primaryForeground,
-    },
+    btnText: { fontSize: 16, fontWeight: "700", color: colors.primaryForeground },
     footer: {
       flexDirection: "row",
       justifyContent: "center",
       alignItems: "center",
     },
-    footerText: {
-      fontSize: 14,
-      color: colors.mutedForeground,
-    },
-    link: {
-      fontSize: 14,
-      fontWeight: "700",
-      color: colors.primary,
-    },
+    footerText: { fontSize: 14, color: colors.mutedForeground },
+    link: { fontSize: 14, fontWeight: "700", color: colors.primary },
     error: {
       fontSize: 12,
       color: colors.destructive,
