@@ -2,7 +2,7 @@ import { useAuth } from "@clerk/expo";
 import { Icon } from "@/components/Icon";
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -15,25 +15,30 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import ThemedInput from "@/components/ThemedInput";
 import { useColors } from "@/hooks/useColors";
+import { VOICE_CONFIG } from "@/constants/voiceTypes";
 
 type RequestStatus = "pending" | "approved" | "rejected";
-type FilterType = "pending" | "approved" | "rejected" | "all";
+type Tab = "requests" | "admins";
 
-type VerificationRequest = {
+interface VerifyReq {
   id: string;
   userId: string;
   userEmail: string;
   userName: string | null;
-  requestedAccountType: "company" | "celebrity";
+  requestedVoiceType: string;
   status: RequestStatus;
   note: string | null;
-  requestedAt: string;
+  requestedAt: string | null;
   reviewedAt: string | null;
-};
+}
 
-// Track which specific action is in progress per request
-type ProcessingState = { id: string; action: "approve" | "reject" } | null;
+interface AdminRow {
+  userId: string;
+  userEmail: string | null;
+  grantedAt: string | null;
+}
 
 export default function AdminScreen() {
   const colors = useColors();
@@ -41,263 +46,265 @@ export default function AdminScreen() {
   const router = useRouter();
   const { getToken } = useAuth();
 
-  // Read env var inside component so it's always fresh
   const API_URL = process.env.EXPO_PUBLIC_API_URL ?? "";
 
-  const [requests, setRequests] = useState<VerificationRequest[]>([]);
+  const [tab, setTab] = useState<Tab>("requests");
+  const [requests, setRequests] = useState<VerifyReq[]>([]);
+  const [adminList, setAdminList] = useState<AdminRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [filter, setFilter] = useState<FilterType>("pending");
-  const [processing, setProcessing] = useState<ProcessingState>(null);
+  const [actionId, setActionId] = useState<string | null>(null);
+  const [grantEmail, setGrantEmail] = useState("");
+  const [granting, setGranting] = useState(false);
+  const [revoking, setRevoking] = useState<string | null>(null);
+  const [filter, setFilter] = useState<"pending" | "all">("pending");
 
-  // Debounce ref so rapid refresh taps don't fire concurrent fetches
-  const fetchingRef = useRef(false);
+  const authHeaders = useCallback(async () => {
+    const token = await getToken();
+    return { "Content-Type": "application/json", Authorization: `Bearer ${token ?? ""}` };
+  }, [getToken]);
 
-  const fetchRequests = useCallback(
-    async (isRefresh = false) => {
-      if (fetchingRef.current && !isRefresh) return;
-      fetchingRef.current = true;
-      setError(null);
-
-      if (!API_URL) {
-        setError("Backend not configured. Set EXPO_PUBLIC_API_URL to use the admin panel.");
-        setLoading(false);
-        setRefreshing(false);
-        fetchingRef.current = false;
+  const load = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
+    try {
+      const h = await authHeaders();
+      const [reqRes, admRes] = await Promise.all([
+        fetch(`${API_URL}/api/admin/verify-requests`, { headers: h }),
+        fetch(`${API_URL}/api/admin/admins`, { headers: h }),
+      ]);
+      if (reqRes.status === 403) {
+        Alert.alert("Access Denied", "You don't have admin privileges.", [{ text: "Go Back", onPress: () => router.back() }]);
         return;
       }
+      if (reqRes.ok) { const d = await reqRes.json(); setRequests(d.requests ?? []); }
+      if (admRes.ok) { const d = await admRes.json(); setAdminList(d.admins ?? []); }
+    } catch {
+      Alert.alert("Error", "Could not load data. Check your connection.");
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [API_URL, authHeaders]);
 
-      try {
-        const token = await getToken();
-        const res = await fetch(`${API_URL}/api/admin/verify-requests`, {
-          headers: { Authorization: `Bearer ${token ?? ""}` },
-        });
-
-        if (!res.ok) {
-          if (res.status === 403) {
-            Alert.alert(
-              "Access Denied",
-              "You don't have admin privileges.",
-              [{ text: "Go Back", onPress: () => router.back() }]
-            );
-            return;
-          }
-          throw new Error(`Server error (${res.status})`);
-        }
-
-        const data = await res.json();
-        setRequests(data.requests ?? []);
-      } catch (err: any) {
-        setError(err.message ?? "Could not load requests.");
-      } finally {
-        setLoading(false);
-        setRefreshing(false);
-        fetchingRef.current = false;
-      }
-    },
-    [getToken, API_URL]
-  );
-
-  useEffect(() => {
-    fetchRequests();
-  }, [fetchRequests]);
+  useEffect(() => { load(); }, [load]);
 
   function confirmAction(id: string, action: "approve" | "reject") {
     const req = requests.find((r) => r.id === id);
     if (!req) return;
-
     const name = req.userName || req.userEmail.split("@")[0];
-    const label = action === "approve" ? "Approve" : "Reject";
-    const typeLabel =
-      req.requestedAccountType === "celebrity" ? "Celebrity" : "Company";
-
+    const cfg = VOICE_CONFIG[req.requestedVoiceType as keyof typeof VOICE_CONFIG];
+    const typeLabel = cfg?.label ?? req.requestedVoiceType;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-
     Alert.alert(
-      `${label} request?`,
-      `${label} ${typeLabel} verification for ${name}?`,
+      `${action === "approve" ? "Approve" : "Reject"} request?`,
+      `${action === "approve" ? "Approve" : "Reject"} ${typeLabel} voice for ${name}?`,
       [
         { text: "Cancel", style: "cancel" },
-        {
-          text: label,
-          style: action === "reject" ? "destructive" : "default",
-          onPress: () => handleAction(id, action),
-        },
+        { text: action === "approve" ? "Approve" : "Reject", style: action === "reject" ? "destructive" : "default", onPress: () => handleAction(id, action) },
       ]
     );
   }
 
   async function handleAction(id: string, action: "approve" | "reject") {
-    setProcessing({ id, action });
+    setActionId(id);
     try {
-      const token = await getToken();
+      const h = await authHeaders();
       const res = await fetch(`${API_URL}/api/admin/verify-requests/${id}`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token ?? ""}`,
-        },
-        body: JSON.stringify({ action }),
+        method: "PATCH", headers: h, body: JSON.stringify({ action }),
       });
-
-      let data: any = {};
-      try { data = await res.json(); } catch {}
-
-      if (!res.ok) {
-        throw new Error(data.error ?? "Failed");
-      }
-
+      let data: any = {}; try { data = await res.json(); } catch {}
+      if (!res.ok) throw new Error(data.error ?? "Failed");
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-
-      const newStatus: RequestStatus =
-        action === "approve" ? "approved" : "rejected";
-
-      setRequests((prev) =>
-        prev.map((r) =>
-          r.id === id
-            ? { ...r, status: newStatus, reviewedAt: new Date().toISOString() }
-            : r
-        )
-      );
+      setRequests((prev) => prev.map((r) => r.id === id ? { ...r, status: action === "approve" ? "approved" : "rejected", reviewedAt: new Date().toISOString() } : r));
     } catch (err: any) {
       Alert.alert("Error", err.message ?? "Could not process request.");
     } finally {
-      setProcessing(null);
+      setActionId(null);
     }
   }
 
-  const filtered = requests.filter(
-    (r) => filter === "all" || r.status === filter
-  );
+  async function handleGrant() {
+    const email = grantEmail.trim();
+    if (!email) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setGranting(true);
+    try {
+      const h = await authHeaders();
+      const res = await fetch(`${API_URL}/api/admin/grant`, { method: "POST", headers: h, body: JSON.stringify({ userEmail: email }) });
+      const d = await res.json().catch(() => ({}));
+      if (res.ok) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        setGrantEmail("");
+        load(true);
+        Alert.alert("Done", `Admin access granted to ${email}`);
+      } else {
+        Alert.alert("Error", d.error ?? "Failed to grant access");
+      }
+    } catch {
+      Alert.alert("Error", "Network error");
+    } finally {
+      setGranting(false);
+    }
+  }
+
+  function confirmRevoke(targetId: string, email: string | null) {
+    Alert.alert(
+      "Revoke Admin",
+      `Remove admin access from ${email ?? targetId}?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "Revoke", style: "destructive", onPress: () => doRevoke(targetId) },
+      ]
+    );
+  }
+
+  async function doRevoke(targetId: string) {
+    setRevoking(targetId);
+    try {
+      const h = await authHeaders();
+      const res = await fetch(`${API_URL}/api/admin/revoke/${targetId}`, { method: "DELETE", headers: h });
+      if (res.ok) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        setAdminList((prev) => prev.filter((a) => a.userId !== targetId));
+      } else {
+        const d = await res.json().catch(() => ({}));
+        Alert.alert("Error", d.error ?? "Failed");
+      }
+    } catch {
+      Alert.alert("Error", "Network error");
+    } finally {
+      setRevoking(null);
+    }
+  }
+
   const pendingCount = requests.filter((r) => r.status === "pending").length;
+  const displayed = filter === "pending" ? requests.filter((r) => r.status === "pending") : requests;
 
   const s = styles(colors, insets);
 
   return (
     <View style={s.container}>
       {/* Header */}
-      <View
-        style={[
-          s.header,
-          { paddingTop: Platform.OS === "web" ? 20 : insets.top + 8 },
-        ]}
-      >
-        <Pressable
-          style={({ pressed }) => [s.iconBtn, pressed && { opacity: 0.6 }]}
-          onPress={() => router.back()}
-        >
-          <Icon name="x" size={20} color={colors.mutedForeground} />
+      <View style={[s.header, { paddingTop: Platform.OS === "web" ? 20 : insets.top + 8 }]}>
+        <Pressable style={({ pressed }) => [s.iconBtn, pressed && { opacity: 0.6 }]} onPress={() => router.back()}>
+          <Icon name="arrow-left" size={20} color={colors.mutedForeground} />
         </Pressable>
-
         <View style={s.headerCenter}>
           <Icon name="shield" size={16} color={colors.primary} />
           <Text style={s.headerTitle}>Admin Panel</Text>
-          {pendingCount > 0 && (
-            <View style={s.badge}>
-              <Text style={s.badgeText}>{pendingCount}</Text>
-            </View>
-          )}
+          {pendingCount > 0 && <View style={s.pendingBadge}><Text style={s.pendingBadgeText}>{pendingCount}</Text></View>}
         </View>
-
-        <Pressable
-          style={({ pressed }) => [s.iconBtn, pressed && { opacity: 0.6 }]}
-          onPress={() => {
-            if (refreshing) return;
-            setRefreshing(true);
-            fetchRequests(true);
-          }}
-        >
-          {refreshing ? (
-            <ActivityIndicator size="small" color={colors.primary} />
-          ) : (
-            <Icon name="refresh-cw" size={18} color={colors.mutedForeground} />
-          )}
+        <Pressable style={({ pressed }) => [s.iconBtn, pressed && { opacity: 0.6 }]} onPress={() => { setRefreshing(true); load(true); }}>
+          {refreshing ? <ActivityIndicator size="small" color={colors.primary} /> : <Icon name="refresh-cw" size={18} color={colors.mutedForeground} />}
         </Pressable>
       </View>
 
-      {/* Filter tabs */}
-      <View style={s.filterRow}>
-        {(["pending", "all", "approved", "rejected"] as const).map((f) => (
-          <Pressable
-            key={f}
-            style={[s.filterTab, filter === f && s.filterTabActive]}
-            onPress={() => setFilter(f)}
-          >
-            <Text
-              style={[
-                s.filterTabText,
-                filter === f && s.filterTabTextActive,
-              ]}
-            >
-              {f.charAt(0).toUpperCase() + f.slice(1)}
-              {f === "pending" && pendingCount > 0 ? ` (${pendingCount})` : ""}
-            </Text>
-          </Pressable>
-        ))}
+      {/* Tabs */}
+      <View style={s.tabs}>
+        <Pressable style={[s.tab, tab === "requests" && s.tabActive]} onPress={() => setTab("requests")}>
+          <Text style={[s.tabText, tab === "requests" && s.tabTextActive]}>
+            Requests{pendingCount > 0 ? ` (${pendingCount})` : ""}
+          </Text>
+        </Pressable>
+        <Pressable style={[s.tab, tab === "admins" && s.tabActive]} onPress={() => setTab("admins")}>
+          <Text style={[s.tabText, tab === "admins" && s.tabTextActive]}>
+            Admins ({adminList.length})
+          </Text>
+        </Pressable>
       </View>
 
-      {/* Body */}
       {loading ? (
-        <View style={s.center}>
-          <ActivityIndicator color={colors.primary} />
-        </View>
-      ) : error ? (
-        // ── Error state ─────────────────────────────────────────
-        <View style={s.center}>
-          <Icon name="alert-circle" size={40} color={colors.no} />
-          <Text style={s.errorTitle}>Something went wrong</Text>
-          <Text style={s.errorSubtitle}>{error}</Text>
-          <Pressable
-            style={({ pressed }) => [s.retryBtn, pressed && { opacity: 0.8 }]}
-            onPress={() => {
-              setLoading(true);
-              fetchRequests();
-            }}
-          >
-            <Icon name="refresh-cw" size={14} color="#fff" />
-            <Text style={s.retryBtnText}>Retry</Text>
-          </Pressable>
-        </View>
+        <View style={s.center}><ActivityIndicator color={colors.primary} /></View>
       ) : (
-        // ── Request list ─────────────────────────────────────────
         <ScrollView
-          showsVerticalScrollIndicator={false}
           contentContainerStyle={s.scroll}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={() => {
-                setRefreshing(true);
-                fetchRequests(true);
-              }}
-              tintColor={colors.primary}
-            />
-          }
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(true); }} tintColor={colors.primary} />}
         >
-          {filtered.length === 0 ? (
-            <View style={s.empty}>
-              <Icon name="inbox" size={40} color={colors.border} />
-              <Text style={s.emptyTitle}>
-                No {filter === "all" ? "" : filter} requests
-              </Text>
-              <Text style={s.emptySubtitle}>
-                {filter === "pending"
-                  ? "Nothing waiting for review right now"
-                  : "Nothing to show for this filter"}
-              </Text>
-            </View>
-          ) : (
-            filtered.map((req) => (
-              <RequestCard
-                key={req.id}
-                req={req}
-                processing={processing}
-                colors={colors}
-                s={s}
-                onAction={confirmAction}
-              />
-            ))
+          {/* ── REQUESTS TAB ── */}
+          {tab === "requests" && (
+            <>
+              {/* Filter */}
+              <View style={s.filterRow}>
+                {(["pending", "all"] as const).map((f) => (
+                  <Pressable key={f} style={[s.filterChip, filter === f && s.filterChipActive]} onPress={() => setFilter(f)}>
+                    <Text style={[s.filterChipText, filter === f && s.filterChipTextActive]}>
+                      {f === "pending" ? `Pending${pendingCount > 0 ? ` (${pendingCount})` : ""}` : "All"}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+
+              {displayed.length === 0 ? (
+                <View style={s.empty}>
+                  <Icon name="inbox" size={40} color={colors.border} />
+                  <Text style={s.emptyText}>{filter === "pending" ? "No pending requests" : "No requests yet"}</Text>
+                </View>
+              ) : (
+                displayed.map((req) => (
+                  <RequestCard key={req.id} req={req} actionId={actionId} onAction={confirmAction} colors={colors} s={s} />
+                ))
+              )}
+            </>
+          )}
+
+          {/* ── ADMINS TAB ── */}
+          {tab === "admins" && (
+            <>
+              {/* Grant new admin */}
+              <View style={s.grantCard}>
+                <View style={s.grantTitleRow}>
+                  <Icon name="user-plus" size={16} color={colors.primary} />
+                  <Text style={s.grantTitle}>Grant Admin Access</Text>
+                </View>
+                <Text style={s.grantSub}>Enter the email of a user who has signed in at least once.</Text>
+                <View style={s.grantRow}>
+                  <ThemedInput
+                    style={s.grantInput}
+                    value={grantEmail}
+                    onChangeText={setGrantEmail}
+                    placeholder="user@email.com"
+                    placeholderTextColor={colors.mutedForeground}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    returnKeyType="done"
+                    onSubmitEditing={handleGrant}
+                  />
+                  <Pressable
+                    style={({ pressed }) => [s.grantBtn, (!grantEmail.trim() || granting) && s.grantBtnDisabled, pressed && !!grantEmail.trim() && { opacity: 0.8 }]}
+                    onPress={handleGrant}
+                    disabled={!grantEmail.trim() || granting}
+                  >
+                    {granting ? <ActivityIndicator size="small" color="#fff" /> : <Icon name="check" size={18} color="#fff" />}
+                  </Pressable>
+                </View>
+              </View>
+
+              <Text style={s.sectionLabel}>Current Admins</Text>
+              {adminList.length === 0 ? (
+                <View style={s.empty}><Text style={s.emptyText}>No admins yet</Text></View>
+              ) : (
+                adminList.map((a) => (
+                  <View key={a.userId} style={s.adminRow}>
+                    <View style={s.adminAvatar}>
+                      <Text style={s.adminAvatarText}>{(a.userEmail?.[0] ?? "?").toUpperCase()}</Text>
+                    </View>
+                    <View style={s.adminInfo}>
+                      <Text style={s.adminEmail} numberOfLines={1}>{a.userEmail ?? a.userId}</Text>
+                      {a.grantedAt && <Text style={s.adminDate}>Admin since {new Date(a.grantedAt).toLocaleDateString()}</Text>}
+                    </View>
+                    <Pressable
+                      style={({ pressed }) => [s.revokeBtn, pressed && { opacity: 0.7 }]}
+                      onPress={() => confirmRevoke(a.userId, a.userEmail)}
+                      disabled={revoking === a.userId}
+                    >
+                      {revoking === a.userId
+                        ? <ActivityIndicator size="small" color={colors.no} />
+                        : <Icon name="user-x" size={16} color={colors.no} />}
+                    </Pressable>
+                  </View>
+                ))
+              )}
+            </>
           )}
         </ScrollView>
       )}
@@ -305,168 +312,74 @@ export default function AdminScreen() {
   );
 }
 
-// ── Extracted card component ────────────────────────────────────────────────
-function RequestCard({
-  req,
-  processing,
-  colors,
-  s,
-  onAction,
-}: {
-  req: VerificationRequest;
-  processing: ProcessingState;
-  colors: ReturnType<typeof useColors>;
-  s: ReturnType<typeof styles>;
+function RequestCard({ req, actionId, onAction, colors, s }: {
+  req: VerifyReq;
+  actionId: string | null;
   onAction: (id: string, action: "approve" | "reject") => void;
+  colors: any;
+  s: any;
 }) {
-  const isApproving =
-    processing?.id === req.id && processing.action === "approve";
-  const isRejecting =
-    processing?.id === req.id && processing.action === "reject";
-  const isProcessing = isApproving || isRejecting;
+  const cfg = VOICE_CONFIG[req.requestedVoiceType as keyof typeof VOICE_CONFIG];
+  const isProcessing = actionId === req.id;
 
   return (
     <View style={s.card}>
-      {/* Top row: avatar + name + type pill */}
       <View style={s.cardTop}>
         <View style={s.cardLeft}>
           <View style={s.avatarCircle}>
-            <Text style={s.avatarLetter}>
-              {(req.userName?.[0] ?? req.userEmail[0]).toUpperCase()}
-            </Text>
+            <Text style={s.avatarLetter}>{(req.userName?.[0] ?? req.userEmail[0]).toUpperCase()}</Text>
           </View>
           <View style={s.cardMeta}>
-            <Text style={s.cardName} numberOfLines={1}>
-              {req.userName || req.userEmail.split("@")[0]}
-            </Text>
-            <Text style={s.cardEmail} numberOfLines={1}>
-              {req.userEmail}
-            </Text>
+            <Text style={s.cardName} numberOfLines={1}>{req.userName || req.userEmail.split("@")[0]}</Text>
+            <Text style={s.cardEmail} numberOfLines={1}>{req.userEmail}</Text>
           </View>
         </View>
-        <View
-          style={[
-            s.typePill,
-            req.requestedAccountType === "celebrity"
-              ? s.typeCeleb
-              : s.typeCompany,
-          ]}
-        >
-          <Icon
-            name={
-              req.requestedAccountType === "celebrity" ? "star" : "briefcase"
-            }
-            size={11}
-            color={
-              req.requestedAccountType === "celebrity"
-                ? colors.star
-                : colors.primary
-            }
-          />
-          <Text
-            style={[
-              s.typePillText,
-              req.requestedAccountType === "celebrity"
-                ? s.typePillTextCeleb
-                : s.typePillTextCompany,
-            ]}
-          >
-            {req.requestedAccountType === "celebrity" ? "Celebrity" : "Company"}
-          </Text>
-        </View>
+
+        {cfg ? (
+          <View style={[s.voicePill, { backgroundColor: cfg.color + "22", borderColor: cfg.color + "55" }]}>
+            <Icon name={cfg.icon as any} size={11} color={cfg.color} />
+            <Text style={[s.voicePillText, { color: cfg.color }]}>{cfg.label}</Text>
+          </View>
+        ) : (
+          <View style={s.voicePill}>
+            <Text style={s.voicePillText}>{req.requestedVoiceType}</Text>
+          </View>
+        )}
       </View>
 
-      {/* Note */}
       {req.note ? (
-        <View style={s.noteBox}>
-          <Text style={s.noteText} numberOfLines={3}>
-            {req.note}
-          </Text>
-        </View>
+        <View style={s.noteBox}><Text style={s.noteText} numberOfLines={3}>{req.note}</Text></View>
       ) : null}
 
-      {/* Bottom row: date + actions */}
       <View style={s.cardBottom}>
         <Text style={s.dateText}>
-          {new Date(req.requestedAt).toLocaleDateString("en-US", {
-            month: "short",
-            day: "numeric",
-            year: "numeric",
-          })}
+          {req.requestedAt ? new Date(req.requestedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : ""}
         </Text>
 
         {req.status === "pending" ? (
           <View style={s.actionRow}>
-            {/* Reject */}
             <Pressable
-              style={({ pressed }) => [
-                s.rejectBtn,
-                isProcessing && s.actionBtnDisabled,
-                pressed && !isProcessing && { opacity: 0.75 },
-              ]}
+              style={({ pressed }) => [s.rejectBtn, isProcessing && { opacity: 0.5 }, pressed && !isProcessing && { opacity: 0.75 }]}
               onPress={() => onAction(req.id, "reject")}
               disabled={isProcessing}
             >
-              {isRejecting ? (
-                <ActivityIndicator size="small" color={colors.no} />
-              ) : (
-                <>
-                  <Icon name="x" size={14} color={colors.no} />
-                  <Text style={s.rejectBtnText}>Reject</Text>
-                </>
-              )}
+              {isProcessing ? <ActivityIndicator size="small" color={colors.no} /> : <><Icon name="x" size={14} color={colors.no} /><Text style={s.rejectBtnText}>Reject</Text></>}
             </Pressable>
-
-            {/* Approve */}
             <Pressable
-              style={({ pressed }) => [
-                s.approveBtn,
-                isProcessing && s.approveBtnDisabled,
-                pressed && !isProcessing && { opacity: 0.75 },
-              ]}
+              style={({ pressed }) => [s.approveBtn, isProcessing && { opacity: 0.6 }, pressed && !isProcessing && { opacity: 0.75 }]}
               onPress={() => onAction(req.id, "approve")}
               disabled={isProcessing}
             >
-              {isApproving ? (
-                <ActivityIndicator size="small" color="#fff" />
-              ) : (
-                <>
-                  <Icon name="check" size={14} color="#fff" />
-                  <Text style={s.approveBtnText}>Approve</Text>
-                </>
-              )}
+              {isProcessing ? <ActivityIndicator size="small" color="#fff" /> : <><Icon name="check" size={14} color="#fff" /><Text style={s.approveBtnText}>Approve</Text></>}
             </Pressable>
           </View>
         ) : (
-          <View
-            style={[
-              s.statusChip,
-              req.status === "approved" ? s.statusApproved : s.statusRejected,
-            ]}
-          >
-            <Icon
-              name={req.status === "approved" ? "check-circle" : "x-circle"}
-              size={12}
-              color={req.status === "approved" ? colors.yes : colors.no}
-            />
-            <Text
-              style={[
-                s.statusChipText,
-                req.status === "approved"
-                  ? s.statusApprovedText
-                  : s.statusRejectedText,
-              ]}
-            >
+          <View style={[s.statusChip, req.status === "approved" ? s.statusApproved : s.statusRejected]}>
+            <Icon name={req.status === "approved" ? "check-circle" : "x-circle"} size={12} color={req.status === "approved" ? colors.yes : colors.no} />
+            <Text style={[s.statusChipText, req.status === "approved" ? s.statusApprovedText : s.statusRejectedText]}>
               {req.status === "approved" ? "Approved" : "Rejected"}
             </Text>
-            {req.reviewedAt ? (
-              <Text style={s.reviewedAt}>
-                {new Date(req.reviewedAt).toLocaleDateString("en-US", {
-                  month: "short",
-                  day: "numeric",
-                })}
-              </Text>
-            ) : null}
+            {req.reviewedAt ? <Text style={s.reviewedAt}>{new Date(req.reviewedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</Text> : null}
           </View>
         )}
       </View>
@@ -477,203 +390,74 @@ function RequestCard({
 const styles = (colors: ReturnType<typeof useColors>, insets: any) =>
   StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
-    center: {
-      flex: 1,
-      alignItems: "center",
-      justifyContent: "center",
-      gap: 12,
-      paddingHorizontal: 32,
-    },
+    center: { flex: 1, alignItems: "center", justifyContent: "center" },
     header: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "space-between",
-      paddingHorizontal: 16,
-      paddingBottom: 12,
-      borderBottomWidth: 1,
-      borderBottomColor: colors.border,
+      flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+      paddingHorizontal: 16, paddingBottom: 12,
+      borderBottomWidth: 1, borderBottomColor: colors.border,
     },
     headerCenter: { flexDirection: "row", alignItems: "center", gap: 8 },
     headerTitle: { fontSize: 17, fontWeight: "700", color: colors.foreground },
-    badge: {
-      backgroundColor: colors.no,
-      borderRadius: 10,
-      paddingHorizontal: 7,
-      paddingVertical: 2,
+    pendingBadge: { backgroundColor: colors.no, borderRadius: 10, paddingHorizontal: 7, paddingVertical: 2 },
+    pendingBadgeText: { fontSize: 11, fontWeight: "800", color: "#fff" },
+    iconBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.muted, alignItems: "center", justifyContent: "center" },
+    tabs: { flexDirection: "row", borderBottomWidth: 1, borderBottomColor: colors.border },
+    tab: { flex: 1, paddingVertical: 12, alignItems: "center" },
+    tabActive: { borderBottomWidth: 2, borderBottomColor: colors.primary },
+    tabText: { fontSize: 14, fontWeight: "600", color: colors.mutedForeground },
+    tabTextActive: { color: colors.primary },
+    scroll: { padding: 16, gap: 12, paddingBottom: insets.bottom + 40 },
+    filterRow: { flexDirection: "row", gap: 8 },
+    filterChip: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20, backgroundColor: colors.muted },
+    filterChipActive: { backgroundColor: colors.primary },
+    filterChipText: { fontSize: 12, fontWeight: "600", color: colors.mutedForeground },
+    filterChipTextActive: { color: "#fff" },
+    empty: { alignItems: "center", paddingVertical: 40, gap: 8 },
+    emptyText: { fontSize: 14, color: colors.mutedForeground },
+    sectionLabel: { fontSize: 11, fontWeight: "700", color: colors.mutedForeground, textTransform: "uppercase", letterSpacing: 0.8 },
+    // Grant card
+    grantCard: { backgroundColor: colors.card, borderRadius: 14, borderWidth: 1, borderColor: colors.primary + "44", padding: 14, gap: 8 },
+    grantTitleRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+    grantTitle: { fontSize: 14, fontWeight: "700", color: colors.foreground },
+    grantSub: { fontSize: 12, color: colors.mutedForeground },
+    grantRow: { flexDirection: "row", gap: 8, alignItems: "center" },
+    grantInput: {
+      flex: 1, backgroundColor: colors.muted,
+      borderRadius: 10, borderWidth: 1, borderColor: colors.border,
+      paddingHorizontal: 12, paddingVertical: Platform.OS === "web" ? 10 : 11,
+      fontSize: 14, color: colors.foreground,
     },
-    badgeText: { fontSize: 11, fontWeight: "800", color: "#fff" },
-    iconBtn: {
-      width: 36,
-      height: 36,
-      borderRadius: 18,
-      backgroundColor: colors.muted,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    filterRow: {
-      flexDirection: "row",
-      gap: 8,
-      paddingHorizontal: 16,
-      paddingVertical: 12,
-      borderBottomWidth: 1,
-      borderBottomColor: colors.border,
-    },
-    filterTab: {
-      paddingHorizontal: 12,
-      paddingVertical: 6,
-      borderRadius: 20,
-      backgroundColor: colors.muted,
-    },
-    filterTabActive: { backgroundColor: colors.primary },
-    filterTabText: {
-      fontSize: 12,
-      fontWeight: "600",
-      color: colors.mutedForeground,
-    },
-    filterTabTextActive: { color: "#fff" },
-    scroll: {
-      padding: 16,
-      gap: 12,
-      paddingBottom: insets.bottom + 40,
-    },
-    // Error state
-    errorTitle: {
-      fontSize: 17,
-      fontWeight: "700",
-      color: colors.foreground,
-      textAlign: "center",
-    },
-    errorSubtitle: {
-      fontSize: 13,
-      color: colors.mutedForeground,
-      textAlign: "center",
-      lineHeight: 19,
-    },
-    retryBtn: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 6,
-      backgroundColor: colors.primary,
-      borderRadius: 12,
-      paddingHorizontal: 20,
-      paddingVertical: 11,
-      marginTop: 4,
-    },
-    retryBtnText: { fontSize: 14, fontWeight: "700", color: "#fff" },
-    // Empty state
-    empty: { alignItems: "center", paddingTop: 60, gap: 8 },
-    emptyTitle: {
-      fontSize: 16,
-      fontWeight: "600",
-      color: colors.mutedForeground,
-    },
-    emptySubtitle: {
-      fontSize: 13,
-      color: colors.border,
-      textAlign: "center",
-    },
-    // Card
-    card: {
-      backgroundColor: colors.card,
-      borderRadius: 16,
-      borderWidth: 1,
-      borderColor: colors.border,
-      padding: 16,
-      gap: 12,
-    },
-    cardTop: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "space-between",
-    },
-    cardLeft: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 10,
-      flex: 1,
-    },
-    avatarCircle: {
-      width: 40,
-      height: 40,
-      borderRadius: 20,
-      backgroundColor: colors.primary + "33",
-      alignItems: "center",
-      justifyContent: "center",
-    },
+    grantBtn: { width: 44, height: 44, borderRadius: 10, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
+    grantBtnDisabled: { backgroundColor: colors.muted },
+    // Admin rows
+    adminRow: { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: colors.card, borderRadius: 14, borderWidth: 1, borderColor: colors.border, padding: 12 },
+    adminAvatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.primary + "33", alignItems: "center", justifyContent: "center" },
+    adminAvatarText: { fontSize: 16, fontWeight: "800", color: colors.primary },
+    adminInfo: { flex: 1 },
+    adminEmail: { fontSize: 13, fontWeight: "600", color: colors.foreground },
+    adminDate: { fontSize: 11, color: colors.mutedForeground, marginTop: 2 },
+    revokeBtn: { padding: 8 },
+    // Request cards
+    card: { backgroundColor: colors.card, borderRadius: 16, borderWidth: 1, borderColor: colors.border, padding: 16, gap: 12 },
+    cardTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+    cardLeft: { flexDirection: "row", alignItems: "center", gap: 10, flex: 1 },
+    avatarCircle: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.primary + "33", alignItems: "center", justifyContent: "center" },
     avatarLetter: { fontSize: 16, fontWeight: "800", color: colors.primary },
     cardMeta: { flex: 1 },
     cardName: { fontSize: 14, fontWeight: "700", color: colors.foreground },
     cardEmail: { fontSize: 12, color: colors.mutedForeground },
-    typePill: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 4,
-      paddingHorizontal: 8,
-      paddingVertical: 4,
-      borderRadius: 100,
-    },
-    typeCompany: {
-      backgroundColor: colors.primary + "22",
-      borderWidth: 1,
-      borderColor: colors.primary + "44",
-    },
-    typeCeleb: {
-      backgroundColor: colors.starBg,
-      borderWidth: 1,
-      borderColor: colors.star + "44",
-    },
-    typePillText: { fontSize: 11, fontWeight: "700" },
-    typePillTextCompany: { color: colors.primary },
-    typePillTextCeleb: { color: colors.star },
-    noteBox: {
-      backgroundColor: colors.muted,
-      borderRadius: 10,
-      padding: 10,
-    },
+    voicePill: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 100, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.muted },
+    voicePillText: { fontSize: 11, fontWeight: "700", color: colors.mutedForeground },
+    noteBox: { backgroundColor: colors.muted, borderRadius: 10, padding: 10 },
     noteText: { fontSize: 13, color: colors.mutedForeground, lineHeight: 18 },
-    cardBottom: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "space-between",
-    },
+    cardBottom: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
     dateText: { fontSize: 12, color: colors.mutedForeground },
     actionRow: { flexDirection: "row", gap: 8 },
-    rejectBtn: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 5,
-      backgroundColor: colors.noBg,
-      paddingHorizontal: 12,
-      paddingVertical: 8,
-      borderRadius: 10,
-      borderWidth: 1,
-      borderColor: colors.no + "44",
-      minWidth: 80,
-      justifyContent: "center",
-    },
+    rejectBtn: { flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: colors.noBg, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, borderWidth: 1, borderColor: colors.no + "44", minWidth: 80, justifyContent: "center" },
     rejectBtnText: { fontSize: 13, fontWeight: "700", color: colors.no },
-    approveBtn: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 5,
-      backgroundColor: colors.primary,
-      paddingHorizontal: 14,
-      paddingVertical: 8,
-      borderRadius: 10,
-      minWidth: 90,
-      justifyContent: "center",
-    },
-    approveBtnDisabled: { backgroundColor: colors.primary + "66" },
-    actionBtnDisabled: { opacity: 0.5 },
+    approveBtn: { flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: colors.primary, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, minWidth: 90, justifyContent: "center" },
     approveBtnText: { fontSize: 13, fontWeight: "700", color: "#fff" },
-    statusChip: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 5,
-      paddingHorizontal: 10,
-      paddingVertical: 5,
-      borderRadius: 100,
-    },
+    statusChip: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 100 },
     statusApproved: { backgroundColor: colors.yesBg },
     statusRejected: { backgroundColor: colors.noBg },
     statusChipText: { fontSize: 12, fontWeight: "600" },

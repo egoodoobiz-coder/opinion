@@ -33,6 +33,74 @@ async function checkIsAdmin(userId: string): Promise<boolean> {
   return rows.length > 0;
 }
 
+// GET /admin/admins — list all admins (admin only)
+router.get("/admin/admins", async (req: any, res: any) => {
+  try {
+    const userId = await getAuthenticatedUserId(req);
+    if (!userId) return res.status(401).json({ error: "Unauthorized" });
+    if (!(await checkIsAdmin(userId))) return res.status(403).json({ error: "Forbidden" });
+
+    const rows = await db.select().from(admins);
+    res.json({ admins: rows });
+  } catch (err) {
+    logger.error({ err }, "admin/admins GET error");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// POST /admin/grant — grant admin to another user by email (admin only)
+router.post("/admin/grant", async (req: any, res: any) => {
+  try {
+    const userId = await getAuthenticatedUserId(req);
+    if (!userId) return res.status(401).json({ error: "Unauthorized" });
+    if (!(await checkIsAdmin(userId))) return res.status(403).json({ error: "Forbidden" });
+
+    const { userEmail } = req.body;
+    if (!userEmail || typeof userEmail !== "string") {
+      return res.status(400).json({ error: "userEmail required" });
+    }
+
+    const clerkUsers = await clerk.users.getUserList({ emailAddress: [userEmail] });
+    if (!clerkUsers.data.length) {
+      return res.status(404).json({ error: "No user found with that email — they must sign in at least once first" });
+    }
+
+    const targetId = clerkUsers.data[0].id;
+    const already = await checkIsAdmin(targetId);
+    if (already) {
+      return res.json({ success: true, message: "Already an admin", userId: targetId });
+    }
+
+    await db.insert(admins).values({ userId: targetId, userEmail });
+    logger.info({ grantedBy: userId, targetId, userEmail }, "Admin granted");
+    res.json({ success: true, message: "Admin access granted", userId: targetId });
+  } catch (err) {
+    logger.error({ err }, "admin/grant error");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// DELETE /admin/revoke/:userId — revoke admin (admin only, cannot revoke self)
+router.delete("/admin/revoke/:targetId", async (req: any, res: any) => {
+  try {
+    const userId = await getAuthenticatedUserId(req);
+    if (!userId) return res.status(401).json({ error: "Unauthorized" });
+    if (!(await checkIsAdmin(userId))) return res.status(403).json({ error: "Forbidden" });
+
+    const { targetId } = req.params;
+    if (targetId === userId) {
+      return res.status(400).json({ error: "You cannot revoke your own admin access" });
+    }
+
+    await db.delete(admins).where(eq(admins.userId, targetId));
+    logger.info({ revokedBy: userId, targetId }, "Admin revoked");
+    res.json({ success: true });
+  } catch (err) {
+    logger.error({ err }, "admin/revoke error");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 // POST /admin/seed — grant admin by email using setup secret (no JWT required)
 router.post("/admin/seed", async (req: any, res: any) => {
   try {
