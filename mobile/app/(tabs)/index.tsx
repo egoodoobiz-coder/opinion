@@ -17,6 +17,50 @@ import { useUser } from "@clerk/expo";
 import { useApp, type Category } from "@/context/AppContext";
 import { useColors } from "@/hooks/useColors";
 
+function FollowingStrip() {
+  const colors = useColors();
+  const { topics, followedAccounts, lastSeenTimestamp, markAccountSeen } = useApp();
+
+  const accounts = useMemo(() => {
+    return followedAccounts.map((uid) => {
+      const userTopics = topics.filter((t) => t.createdBy === uid);
+      if (!userTopics.length) return null;
+      const latest = userTopics.sort((a, b) => b.createdAt - a.createdAt)[0];
+      const hasNew = latest.createdAt > (lastSeenTimestamp[uid] ?? 0);
+      const name = latest.createdByName ?? "User";
+      return { uid, name, hasNew, initial: name[0]?.toUpperCase() ?? "?" };
+    }).filter(Boolean) as { uid: string; name: string; hasNew: boolean; initial: string }[];
+  }, [followedAccounts, topics, lastSeenTimestamp]);
+
+  if (!accounts.length) return null;
+
+  return (
+    <View style={{ borderBottomWidth: 1, borderBottomColor: colors.border }}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 10, gap: 16 }}>
+        {accounts.map(({ uid, name, hasNew, initial }) => (
+          <Pressable key={uid} style={{ alignItems: "center", gap: 4 }} onPress={() => markAccountSeen(uid)}>
+            <View style={{
+              width: 48, height: 48, borderRadius: 24,
+              padding: 2,
+              borderWidth: 2.5,
+              borderColor: hasNew ? colors.primary : colors.border,
+            }}>
+              <View style={{
+                flex: 1, borderRadius: 20,
+                backgroundColor: colors.primary + "22",
+                alignItems: "center", justifyContent: "center",
+              }}>
+                <Text style={{ fontSize: 18, fontWeight: "800", color: colors.primary }}>{initial}</Text>
+              </View>
+            </View>
+            <Text style={{ fontSize: 10, color: colors.mutedForeground, maxWidth: 52 }} numberOfLines={1}>{name}</Text>
+          </Pressable>
+        ))}
+      </ScrollView>
+    </View>
+  );
+}
+
 type Filter = "all" | "new" | "top" | "forme";
 
 export default function FeedScreen() {
@@ -169,6 +213,8 @@ export default function FeedScreen() {
           })}
         </ScrollView>
       </View>
+
+      <FollowingStrip />
 
       <FlatList
         data={filtered}

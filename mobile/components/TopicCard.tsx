@@ -32,8 +32,27 @@ export default function TopicCard({ topic, userVoted }: Props) {
   const colors = useColors();
   const router = useRouter();
   const { user } = useUser();
-  const { userDemographics } = useApp();
+  const { userDemographics, followedAccounts, lastSeenTimestamp, followAccount, unfollowAccount, markAccountSeen } = useApp();
   const cat = CATEGORY_CONFIG[topic.category];
+
+  const isSystem = topic.createdBy === "system" || !topic.createdBy;
+  const isOwnPost = user?.id === topic.createdBy;
+  const isFollowed = !isSystem && !isOwnPost && followedAccounts.includes(topic.createdBy);
+  const hasNewPost = isFollowed && topic.createdAt > (lastSeenTimestamp[topic.createdBy] ?? 0);
+  const authorName = topic.createdByName ?? (isSystem ? "Opinion" : "Anonymous");
+  const authorInitial = authorName[0]?.toUpperCase() ?? "?";
+
+  function handleFollowPress() {
+    if (isFollowed) {
+      unfollowAccount(topic.createdBy);
+    } else {
+      followAccount(topic.createdBy, authorName);
+    }
+  }
+
+  function handleAuthorPress() {
+    if (isFollowed && hasNewPost) markAccountSeen(topic.createdBy);
+  }
 
   const isTargetedAtMe = (() => {
     const td = topic.targetDemographics;
@@ -104,6 +123,24 @@ export default function TopicCard({ topic, userVoted }: Props) {
           <Text style={s.time}>{timeAgo}</Text>
         </View>
       </View>
+
+      {!isSystem && (
+        <Pressable style={s.authorRow} onPress={handleAuthorPress}>
+          <View style={[s.avatarRing, hasNewPost && s.avatarRingNew]}>
+            <View style={[s.avatar, { backgroundColor: colors.primary + "33" }]}>
+              <Text style={[s.avatarInitial, { color: colors.primary }]}>{authorInitial}</Text>
+            </View>
+          </View>
+          <Text style={s.authorName} numberOfLines={1}>{authorName}</Text>
+          {!isOwnPost && (
+            <Pressable style={[s.followBtn, isFollowed && s.followBtnActive]} onPress={handleFollowPress} hitSlop={8}>
+              <Text style={[s.followBtnText, isFollowed && s.followBtnTextActive]}>
+                {isFollowed ? "Following" : "Follow"}
+              </Text>
+            </Pressable>
+          )}
+        </Pressable>
+      )}
 
       <Text style={s.title} numberOfLines={2}>
         {topic.title}
@@ -326,6 +363,57 @@ const styles = (colors: ReturnType<typeof useColors>) =>
     aspectPreviewFill: { height: "100%", borderRadius: 2, backgroundColor: colors.yes },
     aspectPreviewPct: { fontSize: 10, color: colors.mutedForeground, width: 26, textAlign: "right" },
     aspectPreviewNone: { fontSize: 10, color: colors.mutedForeground },
+    authorRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+      marginBottom: 8,
+    },
+    avatarRing: {
+      width: 30,
+      height: 30,
+      borderRadius: 15,
+      padding: 2,
+      borderWidth: 2,
+      borderColor: "transparent",
+    },
+    avatarRingNew: {
+      borderColor: colors.primary,
+    },
+    avatar: {
+      flex: 1,
+      borderRadius: 11,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    avatarInitial: {
+      fontSize: 11,
+      fontWeight: "800",
+    },
+    authorName: {
+      fontSize: 12,
+      fontWeight: "600",
+      color: colors.mutedForeground,
+      flex: 1,
+    },
+    followBtn: {
+      paddingHorizontal: 10,
+      paddingVertical: 3,
+      borderRadius: 100,
+      borderWidth: 1,
+      borderColor: colors.primary,
+    },
+    followBtnActive: {
+      backgroundColor: colors.primary + "22",
+    },
+    followBtnText: {
+      fontSize: 11,
+      fontWeight: "700",
+      color: colors.primary,
+    },
+    followBtnTextActive: {
+      color: colors.primary,
+    },
     postNumber: {
       fontSize: 11,
       fontWeight: "700",

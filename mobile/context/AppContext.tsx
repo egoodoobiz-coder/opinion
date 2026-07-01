@@ -67,6 +67,7 @@ export interface Topic {
   hashtags?: string[];
   createdAt: number;
   createdBy: string;
+  createdByName?: string;
   yesCount: number;
   noCount: number;
   totalRating: number;
@@ -89,8 +90,10 @@ interface AppContextValue {
   userVotes: Record<string, UserVote>;
   userId: string;
   userDemographics: UserDemographics;
+  followedAccounts: string[];
+  lastSeenTimestamp: Record<string, number>;
   addTopic: (
-    topic: Omit<Topic, "id" | "topicNumber" | "createdAt" | "yesCount" | "noCount" | "totalRating" | "ratingCount" | "rankingVotes" | "createdBy" | "comments" | "demoBreakdown">,
+    topic: Omit<Topic, "id" | "topicNumber" | "createdAt" | "yesCount" | "noCount" | "totalRating" | "ratingCount" | "rankingVotes" | "createdBy" | "createdByName" | "comments" | "demoBreakdown">,
     premiumAccountType?: string
   ) => void;
   addComment: (topicId: string, text: string, authorId: string, authorName: string) => void;
@@ -99,6 +102,9 @@ interface AppContextValue {
   voteRanking: (topicId: string, orderedIds: string[]) => void;
   voteAspect: (topicId: string, aspect: string, choice: "up" | "down") => void;
   getUserVote: (topicId: string) => UserVote | undefined;
+  followAccount: (userId: string, displayName: string) => void;
+  unfollowAccount: (userId: string) => void;
+  markAccountSeen: (userId: string) => void;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -106,6 +112,8 @@ const AppContext = createContext<AppContextValue | null>(null);
 const TOPICS_KEY = "opinion_topics_v3";
 const VOTES_KEY = "rankit_votes";
 const USER_KEY = "rankit_user";
+const FOLLOWS_KEY = "opinion_follows_v1";
+const SEEN_KEY = "opinion_seen_v1";
 
 const SAMPLE_TOPICS: Topic[] = [
   {
@@ -290,6 +298,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [topics, setTopics] = useState<Topic[]>([]);
   const [userVotes, setUserVotes] = useState<Record<string, UserVote>>({});
   const [userId, setUserId] = useState<string>("");
+  const [followedAccounts, setFollowedAccounts] = useState<string[]>([]);
+  const [lastSeenTimestamp, setLastSeenTimestamp] = useState<Record<string, number>>({});
   const [loaded, setLoaded] = useState(false);
   const { user } = useUser();
   const clerkUserId = user?.id;
@@ -299,11 +309,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     (async () => {
       try {
-        const [topicsRaw, votesRaw, userRaw] = await Promise.all([
+        const [topicsRaw, votesRaw, userRaw, followsRaw, seenRaw] = await Promise.all([
           AsyncStorage.getItem(TOPICS_KEY),
           AsyncStorage.getItem(VOTES_KEY),
           AsyncStorage.getItem(USER_KEY),
+          AsyncStorage.getItem(FOLLOWS_KEY),
+          AsyncStorage.getItem(SEEN_KEY),
         ]);
+
+        if (followsRaw) { try { setFollowedAccounts(JSON.parse(followsRaw)); } catch {} }
+        if (seenRaw) { try { setLastSeenTimestamp(JSON.parse(seenRaw)); } catch {} }
 
         let uid = userRaw;
         if (!uid) {
@@ -369,12 +384,57 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     await AsyncStorage.setItem(VOTES_KEY, JSON.stringify(updated));
   }, []);
 
+  const followAccount = useCallback(
+    (uid: string, displayName: string) => {
+      setFollowedAccounts((prev) => {
+        if (prev.includes(uid)) return prev;
+        const next = [...prev, uid];
+        AsyncStorage.setItem(FOLLOWS_KEY, JSON.stringify(next));
+        return next;
+      });
+      setLastSeenTimestamp((prev) => {
+        const next = { ...prev, [uid]: 0 };
+        AsyncStorage.setItem(SEEN_KEY, JSON.stringify(next));
+        return next;
+      });
+    },
+    []
+  );
+
+  const unfollowAccount = useCallback(
+    (uid: string) => {
+      setFollowedAccounts((prev) => {
+        const next = prev.filter((id) => id !== uid);
+        AsyncStorage.setItem(FOLLOWS_KEY, JSON.stringify(next));
+        return next;
+      });
+      setLastSeenTimestamp((prev) => {
+        const { [uid]: _, ...rest } = prev;
+        AsyncStorage.setItem(SEEN_KEY, JSON.stringify(rest));
+        return rest;
+      });
+    },
+    []
+  );
+
+  const markAccountSeen = useCallback(
+    (uid: string) => {
+      setLastSeenTimestamp((prev) => {
+        const next = { ...prev, [uid]: Date.now() };
+        AsyncStorage.setItem(SEEN_KEY, JSON.stringify(next));
+        return next;
+      });
+    },
+    []
+  );
+
   const addTopic = useCallback(
     (
-      topic: Omit<Topic, "id" | "topicNumber" | "createdAt" | "yesCount" | "noCount" | "totalRating" | "ratingCount" | "rankingVotes" | "createdBy" | "comments" | "demoBreakdown">,
+      topic: Omit<Topic, "id" | "topicNumber" | "createdAt" | "yesCount" | "noCount" | "totalRating" | "ratingCount" | "rankingVotes" | "createdBy" | "createdByName" | "comments" | "demoBreakdown">,
       premiumAccountType?: string
     ) => {
       const effectiveUserId = clerkUserId ?? userId;
+      const displayName = user?.fullName ?? user?.username ?? "Anonymous";
       const nextNumber = topics.reduce((max, t) => Math.max(max, t.topicNumber ?? 0), 0) + 1;
       const newTopic: any = {
         ...topic,
@@ -382,6 +442,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         topicNumber: nextNumber,
         createdAt: Date.now(),
         createdBy: effectiveUserId,
+        createdByName: displayName,
         yesCount: 0,
         noCount: 0,
         totalRating: 0,
@@ -586,6 +647,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         userVotes,
         userId,
         userDemographics,
+        followedAccounts,
+        lastSeenTimestamp,
         addTopic,
         addComment,
         voteYesNo,
@@ -593,6 +656,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         voteRanking,
         voteAspect,
         getUserVote,
+        followAccount,
+        unfollowAccount,
+        markAccountSeen,
       }}
     >
       {children}

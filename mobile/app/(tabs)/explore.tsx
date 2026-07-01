@@ -26,30 +26,33 @@ export default function ExploreScreen() {
 
   const trimmed = query.trim();
   const isHashtagSearch = trimmed.startsWith("#") && trimmed.length > 1;
-  // Strip the leading # and any extra whitespace
   const hashtagQuery = isHashtagSearch
     ? trimmed.slice(1).toLowerCase().trim()
     : "";
+  const hashtagNumber = hashtagQuery ? parseInt(hashtagQuery, 10) : NaN;
+  const isPostNumberSearch =
+    !isNaN(hashtagNumber) && String(hashtagNumber) === hashtagQuery;
 
   const results = useMemo(() => {
     let list = [...topics];
 
-    // Category filter always applies first
     if (activeCategory) {
       list = list.filter((t) => t.category === activeCategory);
     }
 
     if (isHashtagSearch && hashtagQuery) {
-      // Hashtag search: match stored hashtags, title, OR description
-      // This way #chess finds "Is chess a sport?" even if it wasn't tagged
-      list = list.filter((t) => {
-        const tagMatch = t.hashtags?.some((h) =>
-          h.toLowerCase().includes(hashtagQuery)
-        );
-        const titleMatch = t.title.toLowerCase().includes(hashtagQuery);
-        const descMatch = t.description?.toLowerCase().includes(hashtagQuery);
-        return tagMatch || titleMatch || descMatch;
-      });
+      if (isPostNumberSearch) {
+        list = list.filter((t) => t.topicNumber === hashtagNumber);
+      } else {
+        list = list.filter((t) => {
+          const tagMatch = t.hashtags?.some((h) =>
+            h.toLowerCase().includes(hashtagQuery)
+          );
+          const titleMatch = t.title.toLowerCase().includes(hashtagQuery);
+          const descMatch = t.description?.toLowerCase().includes(hashtagQuery);
+          return tagMatch || titleMatch || descMatch;
+        });
+      }
     } else if (trimmed) {
       // Plain text search: match title, description, OR hashtags (without needing #)
       const q = trimmed.toLowerCase();
@@ -106,9 +109,11 @@ export default function ExploreScreen() {
           <View style={s.hashtagBanner}>
             <Icon name="hash" size={12} color={colors.primary} />
             <Text style={s.hashtagBannerText}>
-              Showing posts matching{" "}
-              <Text style={{ fontWeight: "700" }}>#{hashtagQuery}</Text>
-              {" "}— including titles and tags
+              {isPostNumberSearch ? (
+                <>Jumping to post <Text style={{ fontWeight: "700" }}>#{hashtagNumber}</Text></>
+              ) : (
+                <>Showing posts matching <Text style={{ fontWeight: "700" }}>#{hashtagQuery}</Text>{" "}— including titles and tags</>
+              )}
             </Text>
           </View>
         )}
@@ -161,7 +166,9 @@ export default function ExploreScreen() {
               <Icon name="search" size={36} color={colors.border} />
               <Text style={s.emptyTitle}>No results found</Text>
               <Text style={s.emptySubtitle}>
-                {isHashtagSearch
+                {isPostNumberSearch
+                  ? `No post with number #${hashtagNumber} found`
+                  : isHashtagSearch
                   ? `No posts match "#${hashtagQuery}" — try a different tag or word`
                   : "Try a different search term or browse by category"}
               </Text>
