@@ -11,6 +11,7 @@ import {
 import { useColors } from "@/hooks/useColors";
 import { useApp, type Topic } from "@/context/AppContext";
 import { CATEGORY_CONFIG } from "@/constants/categories";
+import { VOICE_CONFIG } from "@/constants/voiceTypes";
 
 interface Props {
   topic: Topic;
@@ -72,9 +73,7 @@ export default function TopicCard({ topic, userVoted }: Props) {
   const hasRanking = topic.votingType === "ranking";
   const hasAspects = topic.votingType === "aspects";
 
-  // Check if topic creator is premium (stored in topic.premiumAccountType)
-  const isPremiumTopic = !!(topic as any).premiumAccountType;
-  const premiumType: string = (topic as any).premiumAccountType ?? "";
+  const voiceCfg = topic.voiceType ? VOICE_CONFIG[topic.voiceType] : null;
 
   const topRanked =
     hasRanking && topic.rankingOptions
@@ -88,7 +87,7 @@ export default function TopicCard({ topic, userVoted }: Props) {
 
   return (
     <Pressable
-      style={({ pressed }) => [s.card, isPremiumTopic && s.cardPremium, pressed && { opacity: 0.85 }]}
+      style={({ pressed }) => [s.card, voiceCfg && s.cardVoice, voiceCfg && { borderColor: voiceCfg.color + "55" }, pressed && { opacity: 0.85 }]}
       onPress={() => router.push(`/topic/${topic.id}`)}
     >
       <View style={s.header}>
@@ -98,12 +97,10 @@ export default function TopicCard({ topic, userVoted }: Props) {
             <Icon name={cat.icon as any} size={12} color={cat.color} />
             <Text style={[s.catLabel, { color: cat.color }]}>{cat.label}</Text>
           </View>
-          {isPremiumTopic && (
-            <View style={[s.verifiedBadge, premiumType === "celebrity" ? s.verifiedCelebrity : s.verifiedCompany]}>
-              <Icon name="check-circle" size={10} color="#fff" />
-              <Text style={s.verifiedText}>
-                {premiumType === "celebrity" ? "Celebrity" : "Company"}
-              </Text>
+          {voiceCfg && (
+            <View style={[s.voiceBadge, { backgroundColor: voiceCfg.color + "22", borderColor: voiceCfg.color + "55" }]}>
+              <Icon name={voiceCfg.icon} size={10} color={voiceCfg.color} />
+              <Text style={[s.voiceBadgeText, { color: voiceCfg.color }]}>{voiceCfg.label}</Text>
             </View>
           )}
           {isTargetedAtMe && (
@@ -275,8 +272,8 @@ const styles = (colors: ReturnType<typeof useColors>) =>
       borderWidth: 1,
       borderColor: colors.border,
     },
-    cardPremium: {
-      borderColor: colors.primary + "55",
+    cardVoice: {
+      borderWidth: 1.5,
     },
     header: {
       flexDirection: "row",
@@ -294,17 +291,16 @@ const styles = (colors: ReturnType<typeof useColors>) =>
       borderRadius: 100,
     },
     catLabel: { fontSize: 11, fontWeight: "600" },
-    verifiedBadge: {
+    voiceBadge: {
       flexDirection: "row",
       alignItems: "center",
       gap: 3,
       paddingHorizontal: 7,
       paddingVertical: 3,
       borderRadius: 100,
+      borderWidth: 1,
     },
-    verifiedCompany: { backgroundColor: colors.primary },
-    verifiedCelebrity: { backgroundColor: colors.star },
-    verifiedText: { fontSize: 10, fontWeight: "700", color: "#fff" },
+    voiceBadgeText: { fontSize: 10, fontWeight: "700" },
     forYouBadge: {
       flexDirection: "row", alignItems: "center", gap: 3,
       backgroundColor: "#10b98122",

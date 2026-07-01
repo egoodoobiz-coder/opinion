@@ -1,5 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useUser } from "@clerk/expo";
+import type { VoiceType } from "@/constants/voiceTypes";
 import React, {
   createContext,
   useCallback,
@@ -68,6 +69,7 @@ export interface Topic {
   createdAt: number;
   createdBy: string;
   createdByName?: string;
+  voiceType?: VoiceType;
   yesCount: number;
   noCount: number;
   totalRating: number;
@@ -93,8 +95,8 @@ interface AppContextValue {
   followedAccounts: string[];
   lastSeenTimestamp: Record<string, number>;
   addTopic: (
-    topic: Omit<Topic, "id" | "topicNumber" | "createdAt" | "yesCount" | "noCount" | "totalRating" | "ratingCount" | "rankingVotes" | "createdBy" | "createdByName" | "comments" | "demoBreakdown">,
-    premiumAccountType?: string
+    topic: Omit<Topic, "id" | "topicNumber" | "createdAt" | "yesCount" | "noCount" | "totalRating" | "ratingCount" | "rankingVotes" | "createdBy" | "createdByName" | "voiceType" | "comments" | "demoBreakdown">,
+    voiceType?: VoiceType
   ) => void;
   addComment: (topicId: string, text: string, authorId: string, authorName: string) => void;
   voteYesNo: (topicId: string, vote: "yes" | "no") => void;
@@ -430,19 +432,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const addTopic = useCallback(
     (
-      topic: Omit<Topic, "id" | "topicNumber" | "createdAt" | "yesCount" | "noCount" | "totalRating" | "ratingCount" | "rankingVotes" | "createdBy" | "createdByName" | "comments" | "demoBreakdown">,
-      premiumAccountType?: string
+      topic: Omit<Topic, "id" | "topicNumber" | "createdAt" | "yesCount" | "noCount" | "totalRating" | "ratingCount" | "rankingVotes" | "createdBy" | "createdByName" | "voiceType" | "comments" | "demoBreakdown">,
+      voiceType?: VoiceType
     ) => {
       const effectiveUserId = clerkUserId ?? userId;
       const displayName = user?.fullName ?? user?.username ?? "Anonymous";
       const nextNumber = topics.reduce((max, t) => Math.max(max, t.topicNumber ?? 0), 0) + 1;
-      const newTopic: any = {
+      const newTopic: Topic = {
         ...topic,
         id: generateId(),
         topicNumber: nextNumber,
         createdAt: Date.now(),
         createdBy: effectiveUserId,
         createdByName: displayName,
+        voiceType,
         yesCount: 0,
         noCount: 0,
         totalRating: 0,
@@ -454,7 +457,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           ? Object.fromEntries((topic.aspects ?? []).map((a) => [a, { up: 0, down: 0 }]))
           : undefined,
       };
-      if (premiumAccountType) newTopic.premiumAccountType = premiumAccountType;
       saveTopics([newTopic, ...topics]);
     },
     [topics, userId, clerkUserId, saveTopics]

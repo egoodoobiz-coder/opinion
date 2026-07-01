@@ -1,12 +1,14 @@
 import { pgTable, text, boolean, timestamp } from "drizzle-orm/pg-core";
 
+// voiceType: "expert" | "brand" | "public" | "creator" | null
 export const users = pgTable("users", {
   id: text("id").primaryKey(),
   email: text("email"),
   stripeCustomerId: text("stripe_customer_id"),
   stripeSubscriptionId: text("stripe_subscription_id"),
   isPremium: boolean("is_premium").default(false),
-  accountType: text("account_type"),
+  isVerified: boolean("is_verified").default(false),
+  voiceType: text("voice_type"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -15,7 +17,7 @@ export const verificationRequests = pgTable("verification_requests", {
   userId: text("user_id").notNull(),
   userEmail: text("user_email").notNull(),
   userName: text("user_name"),
-  requestedAccountType: text("requested_account_type").notNull(), // "company" | "celebrity"
+  requestedVoiceType: text("requested_voice_type").notNull(), // "expert" | "brand" | "public" | "creator"
   status: text("status").notNull().default("pending"), // "pending" | "approved" | "rejected"
   note: text("note"),
   reviewedBy: text("reviewed_by"),
