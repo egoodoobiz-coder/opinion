@@ -19,16 +19,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import ThemedInput from "@/components/ThemedInput";
 import { useApp } from "@/context/AppContext";
 import { useColors } from "@/hooks/useColors";
-import type { VotingType } from "@/context/AppContext";
-
-type AccountType = "regular" | "company" | "celebrity";
-
-const VOTE_TYPE_LABELS: Record<VotingType, string> = {
-  yesno: "Yes/No",
-  rating: "Rating",
-  ranking: "Ranking",
-  aspects: "Aspects",
-};
+import { VOICE_CONFIG } from "@/constants/voiceTypes";
 
 export default function ProfileScreen() {
   const colors = useColors();
@@ -39,8 +30,8 @@ export default function ProfileScreen() {
   const { topics, userVotes, userId } = useApp();
 
   const isPremium = (user?.unsafeMetadata as any)?.isPremium === true;
-  const accountType: AccountType =
-    (user?.unsafeMetadata as any)?.accountType ?? "regular";
+  const voiceType = (user?.unsafeMetadata as any)?.voiceType as string | undefined;
+  const voiceCfg = voiceType ? VOICE_CONFIG[voiceType as keyof typeof VOICE_CONFIG] : null;
 
   const API_URL = process.env.EXPO_PUBLIC_API_URL ?? "";
 
@@ -184,50 +175,6 @@ export default function ProfileScreen() {
     return sum + base + aspectTotal + rankingTotal;
   }, 0);
 
-  // Analytics data for premium users
-  const analyticsData = useMemo(() => {
-    if (!isPremium) return null;
-
-    const byCategory = myTopics.reduce((acc, t) => {
-      acc[t.category] = (acc[t.category] ?? 0) + 1;
-      return acc;
-    }, {} as Record<string, number>);
-
-    function topicEngagement(t: (typeof myTopics)[0]) {
-      const base = t.yesCount + t.noCount + t.ratingCount;
-      const aspectTotal = t.aspectVotes
-        ? Object.values(t.aspectVotes).reduce((s, v) => s + v.up + v.down, 0)
-        : 0;
-      const rankingTotal = Object.values(t.rankingVotes ?? {}).reduce(
-        (s, arr) => s + arr.length,
-        0
-      );
-      return base + aspectTotal + rankingTotal;
-    }
-
-    const topTopic =
-      myTopics.length > 0
-        ? [...myTopics].sort(
-            (a, b) => topicEngagement(b) - topicEngagement(a)
-          )[0]
-        : null;
-
-    const voteTypeBreakdown = myTopics.reduce((acc, t) => {
-      acc[t.votingType] = (acc[t.votingType] ?? 0) + 1;
-      return acc;
-    }, {} as Record<VotingType, number>);
-
-    const totalEngagement = myTopics.reduce(
-      (sum, t) => sum + topicEngagement(t),
-      0
-    );
-    const avgEngagement =
-      myTopics.length > 0
-        ? (totalEngagement / myTopics.length).toFixed(1)
-        : "0";
-
-    return { byCategory, topTopic, voteTypeBreakdown, avgEngagement, topicEngagement };
-  }, [myTopics, isPremium]);
 
   const s = styles(colors, insets);
 
@@ -341,19 +288,10 @@ export default function ProfileScreen() {
                   user?.emailAddresses?.[0]?.emailAddress?.split("@")[0] ||
                   "You"}
               </Text>
-              {isPremium && (
-                <View
-                  style={[
-                    s.badge,
-                    accountType === "celebrity"
-                      ? s.badgeCelebrity
-                      : s.badgeCompany,
-                  ]}
-                >
-                  <Icon name="check-circle" size={11} color="#fff" />
-                  <Text style={s.badgeText}>
-                    {accountType === "celebrity" ? "Celebrity" : "Company"}
-                  </Text>
+              {isPremium && voiceCfg && (
+                <View style={[s.badge, { backgroundColor: voiceCfg.color + "22", borderWidth: 1, borderColor: voiceCfg.color + "55" }]}>
+                  <Icon name={voiceCfg.icon} size={11} color={voiceCfg.color} />
+                  <Text style={[s.badgeText, { color: voiceCfg.color }]}>{voiceCfg.label}</Text>
                 </View>
               )}
             </View>
@@ -399,91 +337,42 @@ export default function ProfileScreen() {
           </Pressable>
         )}
 
-        {/* Premium upgrade / verify */}
+        {/* Voice / verify prompt */}
         {!isPremium && (
           <View style={s.premiumCard}>
             <View style={s.premiumHeader}>
-              <Icon name="star" size={18} color={colors.star} />
-              <Text style={s.premiumTitle}>Get Verified</Text>
+              <Icon name="award" size={18} color={colors.star} />
+              <Text style={s.premiumTitle}>Get a Voice</Text>
             </View>
             <Text style={s.premiumSubtitle}>
-              Apply for a verified badge as a Company or Celebrity account and
-              unlock analytics
+              Apply as an Expert, Brand, Public Figure, or Creator to get a verified Voice badge and unlock analytics.
             </Text>
             <Pressable
-              style={({ pressed }) => [
-                s.upgradeBtn,
-                s.upgradeBtnVerify,
-                pressed && { opacity: 0.8 },
-              ]}
+              style={({ pressed }) => [s.upgradeBtn, s.upgradeBtnVerify, pressed && { opacity: 0.8 }]}
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                 router.push("/verify-request");
               }}
             >
-              <Icon name="check-circle" size={15} color="#fff" />
-              <Text style={s.upgradeBtnText}>Apply for Verification</Text>
+              <Icon name="shield" size={15} color="#fff" />
+              <Text style={s.upgradeBtnText}>Apply for a Voice</Text>
             </Pressable>
           </View>
         )}
 
-        {/* Premium analytics */}
-        {isPremium && analyticsData && (
-          <View style={s.analyticsCard}>
-            <View style={s.analyticsHeader}>
-              <Icon name="bar-chart-2" size={16} color={colors.primary} />
-              <Text style={s.analyticsTitle}>Analytics</Text>
-            </View>
-
-            <View style={s.analyticsGrid}>
-              <View style={s.analyticsItem}>
-                <Text style={s.analyticsNum}>
-                  {analyticsData.avgEngagement}
-                </Text>
-                <Text style={s.analyticsLabel}>Avg engagement</Text>
-              </View>
-              <View style={s.analyticsItem}>
-                <Text style={s.analyticsNum}>{myTopics.length}</Text>
-                <Text style={s.analyticsLabel}>Topics posted</Text>
-              </View>
-            </View>
-
-            {analyticsData.topTopic && (
-              <View style={s.topTopicBlock}>
-                <Text style={s.topTopicLabel}>Top performing topic</Text>
-                <Text style={s.topTopicText} numberOfLines={2}>
-                  {analyticsData.topTopic.title}
-                </Text>
-                <Text style={s.topTopicStats}>
-                  {analyticsData
-                    .topicEngagement(analyticsData.topTopic)
-                    .toLocaleString()}{" "}
-                  total engagements
-                </Text>
-              </View>
-            )}
-
-            {Object.keys(analyticsData.voteTypeBreakdown).length > 0 && (
-              <View style={s.voteBreakdown}>
-                <Text style={s.voteBreakdownLabel}>Vote types used</Text>
-                <View style={s.voteBreakdownRow}>
-                  {(
-                    Object.entries(analyticsData.voteTypeBreakdown) as [
-                      VotingType,
-                      number
-                    ][]
-                  ).map(([vt, count]) => (
-                    <View key={vt} style={s.voteBreakdownItem}>
-                      <Text style={s.voteBreakdownNum}>{count}</Text>
-                      <Text style={s.voteBreakdownType}>
-                        {VOTE_TYPE_LABELS[vt] ?? vt}
-                      </Text>
-                    </View>
-                  ))}
-                </View>
-              </View>
-            )}
-          </View>
+        {/* Analytics button for voice users */}
+        {isPremium && (
+          <Pressable
+            style={({ pressed }) => [s.analyticsBtn, pressed && { opacity: 0.8 }]}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              router.push("/analytics");
+            }}
+          >
+            <Icon name="bar-chart-2" size={16} color={colors.primary} />
+            <Text style={s.analyticsBtnText}>View Analytics</Text>
+            <Icon name="chevron-right" size={16} color={colors.mutedForeground} />
+          </Pressable>
         )}
 
         {/* Admin setup link — subtle, bottom of page */}
@@ -688,9 +577,7 @@ const styles = (colors: ReturnType<typeof useColors>, insets: any) =>
       paddingVertical: 2,
       borderRadius: 100,
     },
-    badgeCompany: { backgroundColor: colors.primary },
-    badgeCelebrity: { backgroundColor: colors.star },
-    badgeText: { fontSize: 10, fontWeight: "700", color: "#fff" },
+    badgeText: { fontSize: 10, fontWeight: "700" },
     userEmail: { fontSize: 12, color: colors.mutedForeground, marginTop: 2 },
     statsRow: {
       flexDirection: "row",
@@ -750,74 +637,25 @@ const styles = (colors: ReturnType<typeof useColors>, insets: any) =>
       paddingVertical: 13,
       borderRadius: 12,
     },
-    upgradeBtnPrimary: { backgroundColor: colors.primary },
     upgradeBtnVerify: { backgroundColor: colors.yes },
     upgradeBtnText: { fontSize: 14, fontWeight: "700", color: "#fff" },
-    analyticsCard: {
-      margin: 16,
-      marginTop: 0,
+    analyticsBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+      marginHorizontal: 16,
+      marginBottom: 12,
       backgroundColor: colors.card,
-      borderRadius: 16,
-      padding: 16,
+      borderRadius: 14,
+      padding: 14,
       borderWidth: 1,
       borderColor: colors.primary + "44",
-      gap: 14,
     },
-    analyticsHeader: { flexDirection: "row", alignItems: "center", gap: 8 },
-    analyticsTitle: { fontSize: 15, fontWeight: "700", color: colors.foreground },
-    analyticsGrid: { flexDirection: "row", gap: 10 },
-    analyticsItem: {
+    analyticsBtnText: {
       flex: 1,
-      backgroundColor: colors.muted,
-      borderRadius: 12,
-      padding: 12,
-      alignItems: "center",
-      gap: 4,
-    },
-    analyticsNum: { fontSize: 22, fontWeight: "800", color: colors.primary },
-    analyticsLabel: {
-      fontSize: 11,
-      color: colors.mutedForeground,
-      textAlign: "center",
-    },
-    topTopicBlock: {
-      backgroundColor: colors.muted,
-      borderRadius: 12,
-      padding: 12,
-      gap: 4,
-    },
-    topTopicLabel: {
-      fontSize: 11,
+      fontSize: 15,
       fontWeight: "700",
-      color: colors.mutedForeground,
-      textTransform: "uppercase",
-      letterSpacing: 0.5,
-    },
-    topTopicText: { fontSize: 14, fontWeight: "600", color: colors.foreground },
-    topTopicStats: { fontSize: 12, color: colors.mutedForeground },
-    voteBreakdown: { gap: 8 },
-    voteBreakdownLabel: {
-      fontSize: 11,
-      fontWeight: "700",
-      color: colors.mutedForeground,
-      textTransform: "uppercase",
-      letterSpacing: 0.5,
-    },
-    voteBreakdownRow: { flexDirection: "row", gap: 8, flexWrap: "wrap" },
-    voteBreakdownItem: {
-      flex: 1,
-      minWidth: 60,
-      backgroundColor: colors.muted,
-      borderRadius: 10,
-      padding: 10,
-      alignItems: "center",
-      gap: 2,
-    },
-    voteBreakdownNum: { fontSize: 18, fontWeight: "800", color: colors.accent },
-    voteBreakdownType: {
-      fontSize: 10,
-      color: colors.mutedForeground,
-      textAlign: "center",
+      color: colors.foreground,
     },
     signInPrompt: {
       flex: 1,
