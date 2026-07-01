@@ -33,6 +33,39 @@ async function checkIsAdmin(userId: string): Promise<boolean> {
   return rows.length > 0;
 }
 
+// POST /admin/seed — grant admin by email using setup secret (no JWT required)
+router.post("/admin/seed", async (req: any, res: any) => {
+  try {
+    const { secret, userEmail } = req.body;
+    const adminSecret = process.env.ADMIN_SETUP_SECRET;
+
+    if (!adminSecret || !secret || secret.trim() !== adminSecret) {
+      return res.status(403).json({ error: "Invalid admin secret" });
+    }
+    if (!userEmail || typeof userEmail !== "string") {
+      return res.status(400).json({ error: "userEmail required" });
+    }
+
+    const clerkUsers = await clerk.users.getUserList({ emailAddress: [userEmail] });
+    if (!clerkUsers.data.length) {
+      return res.status(404).json({ error: "No Clerk user found with that email — make sure they have signed in at least once" });
+    }
+
+    const userId = clerkUsers.data[0].id;
+    const alreadyAdmin = await checkIsAdmin(userId);
+    if (alreadyAdmin) {
+      return res.json({ success: true, message: "Already an admin", userId });
+    }
+
+    await db.insert(admins).values({ userId, userEmail });
+    logger.info({ userId, userEmail }, "Admin seeded via /admin/seed");
+    res.json({ success: true, message: "Admin access granted", userId });
+  } catch (err) {
+    logger.error({ err }, "admin/seed error");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 // POST /admin/claim — grant admin access using the setup secret
 router.post("/admin/claim", async (req: any, res: any) => {
   try {
@@ -81,16 +114,16 @@ router.post("/admin/verify-requests", async (req: any, res: any) => {
     const userId = await getAuthenticatedUserId(req);
     if (!userId) return res.status(401).json({ error: "Unauthorized" });
 
-    const { userEmail, userName, requestedAccountType, note } = req.body;
+    const { userEmail, userName, requestedVoiceType, note } = req.body;
 
-    if (!userEmail || !requestedAccountType) {
+    if (!userEmail || !requestedVoiceType) {
       return res.status(400).json({ error: "Missing required fields" });
     }
     if (typeof userEmail !== "string" || userEmail.length > MAX_EMAIL_LENGTH || !EMAIL_REGEX.test(userEmail)) {
       return res.status(400).json({ error: "Invalid email address" });
     }
-    if (!["company", "celebrity"].includes(requestedAccountType)) {
-      return res.status(400).json({ error: "Invalid account type" });
+    if (!["expert", "brand", "public", "creator"].includes(requestedVoiceType)) {
+      return res.status(400).json({ error: "Invalid voice type" });
     }
     if (userName !== undefined && (typeof userName !== "string" || userName.length > MAX_NAME_LENGTH)) {
       return res.status(400).json({ error: "Invalid username" });
@@ -109,7 +142,7 @@ router.post("/admin/verify-requests", async (req: any, res: any) => {
       return res.status(409).json({
         error: "Request already exists",
         status: active.status,
-        requestedAccountType: active.requestedAccountType,
+        requestedVoiceType: active.requestedVoiceType,
       });
     }
 
@@ -120,7 +153,7 @@ router.post("/admin/verify-requests", async (req: any, res: any) => {
         userId,
         userEmail,
         userName: userName ?? null,
-        requestedAccountType,
+        requestedVoiceType,
         status: "pending",
         note: note ?? null,
       })
@@ -208,11 +241,12 @@ router.patch("/admin/verify-requests/:id", async (req: any, res: any) => {
           id: request.userId,
           email: request.userEmail,
           isPremium: true,
-          accountType: request.requestedAccountType,
+          isVerified: true,
+          voiceType: request.requestedVoiceType,
         })
         .onConflictDoUpdate({
           target: users.id,
-          set: { isPremium: true, accountType: request.requestedAccountType },
+          set: { isPremium: true, isVerified: true, voiceType: request.requestedVoiceType },
         });
     }
 
