@@ -80,7 +80,7 @@ export default function ProfileScreen() {
               unsafeMetadata: {
                 ...(user!.unsafeMetadata as any),
                 isPremium: true,
-                accountType: approved.requestedAccountType,
+                voiceType: approved.requestedVoiceType,
               },
             });
           }

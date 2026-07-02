@@ -29,18 +29,17 @@
       "favicon": "./assets/images/icon.png"
     },
     "plugins": [
-      [
-        "expo-router",
-        {
-          "origin": "https://replit.com/"
-        }
-      ],
+      "expo-router",
       "expo-font",
       "expo-web-browser"
     ],
     "experiments": {
-      "typedRoutes": false,
-      "reactCompiler": true
+      "typedRoutes": false
+    },
+    "extra": {
+      "eas": {
+        "projectId": "2fa0751c-15bd-46c2-9e80-a6b6b3b0921b"
+      }
     }
   }
 }
