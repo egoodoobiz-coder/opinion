@@ -14,7 +14,8 @@
       "backgroundColor": "#0f0a1e"
     },
     "ios": {
-      "supportsTablet": false
+      "supportsTablet": false,
+      "bundleIdentifier": "com.akshay.opinion"
     },
     "android": {
       "backgroundColor": "#0f0a1e",
