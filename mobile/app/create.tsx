@@ -1,8 +1,9 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useAuth, useUser } from "@clerk/expo";
 import { Icon } from "@/components/Icon";
 import * as Haptics from "expo-haptics";
 import { type Href, useRouter } from "expo-router";
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   Alert,
   Platform,
@@ -18,6 +19,20 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ALL_CATEGORIES, CATEGORY_CONFIG } from "@/constants/categories";
 import { useApp, type Category, type VotingType, type UserDemographics } from "@/context/AppContext";
 import { useColors } from "@/hooks/useColors";
+import { DRAFT_KEY } from "@/constants/draft";
+
+interface DraftState {
+  title: string;
+  description: string;
+  category: Category;
+  votingType: VotingType;
+  rankOptions: string[];
+  aspectItems: string[];
+  tagsInput: string;
+  targetAgeRange: string;
+  targetGender: string;
+  targetOccupation: string;
+}
 
 export default function CreateScreen() {
   const colors = useColors();
@@ -41,6 +56,28 @@ export default function CreateScreen() {
   const [submitting, setSubmitting] = useState(false);
   const inputRefs = useRef<Array<TextInput | null>>([]);
   const aspectRefs = useRef<Array<TextInput | null>>([]);
+
+  // Restore a draft that was stashed before an interrupting sign-in redirect
+  useEffect(() => {
+    (async () => {
+      try {
+        const raw = await AsyncStorage.getItem(DRAFT_KEY);
+        if (!raw) return;
+        await AsyncStorage.removeItem(DRAFT_KEY);
+        const draft: DraftState = JSON.parse(raw);
+        setTitle(draft.title);
+        setDescription(draft.description);
+        setCategory(draft.category);
+        setVotingType(draft.votingType);
+        setRankOptions(draft.rankOptions);
+        setAspectItems(draft.aspectItems);
+        setTagsInput(draft.tagsInput);
+        setTargetAgeRange(draft.targetAgeRange);
+        setTargetGender(draft.targetGender);
+        setTargetOccupation(draft.targetOccupation);
+      } catch {}
+    })();
+  }, []);
 
   const needsRankOptions = votingType === "ranking";
   const needsAspects = votingType === "aspects";
@@ -105,7 +142,14 @@ export default function CreateScreen() {
 
   function submit() {
     if (!isSignedIn) {
-      router.replace("/(auth)/sign-in" as Href);
+      const draft: DraftState = {
+        title, description, category, votingType,
+        rankOptions, aspectItems, tagsInput,
+        targetAgeRange, targetGender, targetOccupation,
+      };
+      AsyncStorage.setItem(DRAFT_KEY, JSON.stringify(draft)).finally(() => {
+        router.push("/(auth)/sign-in" as Href);
+      });
       return;
     }
     if (!title.trim()) {

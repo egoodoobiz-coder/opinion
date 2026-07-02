@@ -1,9 +1,11 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useSSO, useSignUp } from "@clerk/expo";
 import * as AuthSession from "expo-auth-session";
 import * as Haptics from "expo-haptics";
 import { type Href, Link, useRouter } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
 import React, { useCallback, useEffect, useState } from "react";
+import { DRAFT_KEY } from "@/constants/draft";
 import {
   ActivityIndicator,
   Alert,
@@ -77,6 +79,11 @@ export default function SignUpScreen() {
     }
   };
 
+  const postSignInRoute = useCallback(async (): Promise<Href> => {
+    const draft = await AsyncStorage.getItem(DRAFT_KEY);
+    return (draft ? "/create" : "/(tabs)") as Href;
+  }, []);
+
   const handleVerify = async () => {
     setErrorMsg(null);
     try {
@@ -86,14 +93,15 @@ export default function SignUpScreen() {
         return;
       }
       if (signUp.status === "complete") {
-        await signUp.finalize({
-          navigate: ({ decorateUrl }) => {
+        const { error: finalizeError } = await signUp.finalize({
+          navigate: async ({ decorateUrl }) => {
             const url = decorateUrl("/");
             if (!url.startsWith("http")) {
-              router.replace("/(tabs)" as Href);
+              router.replace(await postSignInRoute());
             }
           },
         });
+        if (finalizeError) setErrorMsg(clerkMessage(finalizeError));
       }
     } catch (err: any) {
       setErrorMsg(clerkMessage(err));
@@ -122,7 +130,7 @@ export default function SignUpScreen() {
         await setActive({
           session: createdSessionId,
           navigate: async () => {
-            router.replace("/(tabs)" as Href);
+            router.replace(await postSignInRoute());
           },
         });
       }
@@ -134,7 +142,7 @@ export default function SignUpScreen() {
     } finally {
       setGoogleLoading(false);
     }
-  }, [startSSOFlow, router]);
+  }, [startSSOFlow, router, postSignInRoute]);
 
   const s = styles(colors, insets);
 

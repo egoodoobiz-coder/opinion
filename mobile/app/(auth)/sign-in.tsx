@@ -1,9 +1,11 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useSSO, useSignIn } from "@clerk/expo";
 import * as AuthSession from "expo-auth-session";
 import * as Haptics from "expo-haptics";
 import { type Href, Link, useRouter } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
 import React, { useCallback, useEffect, useState } from "react";
+import { DRAFT_KEY } from "@/constants/draft";
 import {
   ActivityIndicator,
   Alert,
@@ -60,6 +62,11 @@ export default function SignInScreen() {
     if (errorMsg) setErrorMsg(null);
   }
 
+  const postSignInRoute = useCallback(async (): Promise<Href> => {
+    const draft = await AsyncStorage.getItem(DRAFT_KEY);
+    return (draft ? "/create" : "/(tabs)") as Href;
+  }, []);
+
   const handleEmailSignIn = async () => {
     setErrorMsg(null);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -70,14 +77,15 @@ export default function SignInScreen() {
         return;
       }
       if (signIn.status === "complete") {
-        await signIn.finalize({
-          navigate: ({ decorateUrl }) => {
+        const { error: finalizeError } = await signIn.finalize({
+          navigate: async ({ decorateUrl }) => {
             const url = decorateUrl("/");
             if (!url.startsWith("http")) {
-              router.replace("/(tabs)" as Href);
+              router.replace(await postSignInRoute());
             }
           },
         });
+        if (finalizeError) setErrorMsg(clerkMessage(finalizeError));
       }
     } catch (err: any) {
       setErrorMsg(clerkMessage(err));
@@ -89,11 +97,12 @@ export default function SignInScreen() {
     try {
       await signIn.mfa.verifyEmailCode({ code: verifyCode });
       if (signIn.status === "complete") {
-        await signIn.finalize({
-          navigate: () => {
-            router.replace("/(tabs)" as Href);
+        const { error: finalizeError } = await signIn.finalize({
+          navigate: async () => {
+            router.replace(await postSignInRoute());
           },
         });
+        if (finalizeError) setErrorMsg(clerkMessage(finalizeError));
       }
     } catch (err: any) {
       setErrorMsg(clerkMessage(err));
@@ -122,7 +131,7 @@ export default function SignInScreen() {
         await setActive({
           session: createdSessionId,
           navigate: async () => {
-            router.replace("/(tabs)" as Href);
+            router.replace(await postSignInRoute());
           },
         });
       }
@@ -135,7 +144,7 @@ export default function SignInScreen() {
     } finally {
       setGoogleLoading(false);
     }
-  }, [startSSOFlow, router]);
+  }, [startSSOFlow, router, postSignInRoute]);
 
   const s = styles(colors, insets);
 
