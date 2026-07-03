@@ -122,7 +122,7 @@ export default function SignUpScreen() {
     try {
       setGoogleLoading(true);
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      const { createdSessionId, setActive } = await startSSOFlow({
+      const { createdSessionId, setActive, signIn, authSessionResult } = await startSSOFlow({
         strategy: "oauth_google",
         redirectUrl: AuthSession.makeRedirectUri(),
       });
@@ -133,6 +133,17 @@ export default function SignUpScreen() {
             router.replace(await postSignInRoute());
           },
         });
+      } else if (authSessionResult?.type === "success" || authSessionResult?.type === "opened") {
+        const status = signIn?.status;
+        if (status) {
+          setErrorMsg(
+            `Google sign-in didn't complete (status: ${status}). This email may already have an account set up with a password — try signing in with email + password instead.`
+          );
+        } else {
+          setErrorMsg(
+            "Google sign-in didn't complete. This email may already have an account with a password — try signing in with email + password instead."
+          );
+        }
       }
     } catch (err: any) {
       const msg = clerkMessage(err);

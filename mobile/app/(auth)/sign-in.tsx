@@ -57,6 +57,13 @@ export default function SignInScreen() {
   const [googleLoading, setGoogleLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  // ── Forgot password state ──────────────────────────────────────────────
+  const [forgotStep, setForgotStep] = useState<"none" | "email" | "reset">("none");
+  const [resetEmail, setResetEmail] = useState("");
+  const [resetCode, setResetCode] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [forgotBusy, setForgotBusy] = useState(false);
+
   // Clear inline error when user starts editing
   function clearError() {
     if (errorMsg) setErrorMsg(null);
@@ -118,12 +125,93 @@ export default function SignInScreen() {
     }
   };
 
+  // ── Forgot password handlers ─────────────────────────────────────────────
+  const handleSendResetCode = async () => {
+    setErrorMsg(null);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setForgotBusy(true);
+    try {
+      const { error: createError } = await signIn.create({ identifier: resetEmail });
+      if (createError) {
+        setErrorMsg(clerkMessage(createError));
+        return;
+      }
+      const { error: sendError } = await signIn.resetPasswordEmailCode.sendCode();
+      if (sendError) {
+        setErrorMsg(clerkMessage(sendError));
+        return;
+      }
+      setForgotStep("reset");
+    } catch (err: any) {
+      setErrorMsg(clerkMessage(err));
+    } finally {
+      setForgotBusy(false);
+    }
+  };
+
+  const handleResendResetCode = async () => {
+    try {
+      await signIn.resetPasswordEmailCode.sendCode();
+      Alert.alert("Code sent", "A new reset code has been sent to your email.");
+    } catch (err: any) {
+      Alert.alert("Error", clerkMessage(err));
+    }
+  };
+
+  const handleSubmitReset = async () => {
+    setErrorMsg(null);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setForgotBusy(true);
+    try {
+      const { error: verifyError } = await signIn.resetPasswordEmailCode.verifyCode({ code: resetCode });
+      if (verifyError) {
+        setErrorMsg(clerkMessage(verifyError));
+        return;
+      }
+      const { error: submitError } = await signIn.resetPasswordEmailCode.submitPassword({
+        password: newPassword,
+        signOutOfOtherSessions: true,
+      });
+      if (submitError) {
+        setErrorMsg(clerkMessage(submitError));
+        return;
+      }
+      if (signIn.status === "complete") {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        const { error: finalizeError } = await signIn.finalize({
+          navigate: async () => {
+            router.replace(await postSignInRoute());
+          },
+        });
+        if (finalizeError) setErrorMsg(clerkMessage(finalizeError));
+      }
+    } catch (err: any) {
+      setErrorMsg(clerkMessage(err));
+    } finally {
+      setForgotBusy(false);
+    }
+  };
+
+  function openForgotPassword() {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setErrorMsg(null);
+    setResetEmail(email);
+    setResetCode("");
+    setNewPassword("");
+    setForgotStep("email");
+  }
+
+  function closeForgotPassword() {
+    setErrorMsg(null);
+    setForgotStep("none");
+  }
+
   const handleGoogle = useCallback(async () => {
     setErrorMsg(null);
     try {
       setGoogleLoading(true);
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      const { createdSessionId, setActive } = await startSSOFlow({
+      const { createdSessionId, setActive, signIn, authSessionResult } = await startSSOFlow({
         strategy: "oauth_google",
         redirectUrl: AuthSession.makeRedirectUri(),
       });
@@ -134,9 +222,23 @@ export default function SignInScreen() {
             router.replace(await postSignInRoute());
           },
         });
+      } else if (authSessionResult?.type === "success" || authSessionResult?.type === "opened") {
+        // The OAuth round-trip completed but Clerk didn't hand back a session —
+        // this usually means an account with this email already exists via a
+        // different sign-in method and needs to be linked/verified explicitly.
+        const status = signIn?.status;
+        if (status) {
+          setErrorMsg(
+            `Google sign-in didn't complete (status: ${status}). This email may already have an account set up with a password — try signing in with email + password instead.`
+          );
+        } else {
+          setErrorMsg(
+            "Google sign-in didn't complete. This email may already have an account with a password — try signing in with email + password instead."
+          );
+        }
       }
+      // authSessionResult?.type === "cancel" / "dismiss" — user backed out, no error shown.
     } catch (err: any) {
-      // User cancelled — no error shown. Other errors shown inline.
       const msg = clerkMessage(err);
       if (!msg.toLowerCase().includes("cancel")) {
         setErrorMsg(msg);
@@ -147,6 +249,118 @@ export default function SignInScreen() {
   }, [startSSOFlow, router, postSignInRoute]);
 
   const s = styles(colors, insets);
+
+  // ── Forgot password: enter email step ────────────────────────────────────
+  if (forgotStep === "email") {
+    return (
+      <ScrollView
+        contentContainerStyle={[s.container, { paddingTop: Platform.OS === "web" ? 80 : insets.top + 60 }]}
+        keyboardShouldPersistTaps="handled"
+      >
+        <Text style={s.logoText}>Opinion</Text>
+        <Text style={s.title}>Reset your password</Text>
+        <Text style={s.subtitle}>Enter your email and we'll send you a reset code</Text>
+
+        <Text style={s.label}>Email</Text>
+        <ThemedInput
+          style={s.input}
+          placeholder="you@example.com"
+          placeholderTextColor={colors.mutedForeground}
+          value={resetEmail}
+          onChangeText={(t) => { setResetEmail(t); clearError(); }}
+          autoCapitalize="none"
+          keyboardType="email-address"
+          autoComplete="email"
+          autoFocus
+          returnKeyType="done"
+          onSubmitEditing={handleSendResetCode}
+        />
+
+        {errorMsg && <Text style={s.error}>{errorMsg}</Text>}
+
+        <Pressable
+          style={({ pressed }) => [
+            s.btn,
+            (!resetEmail || forgotBusy) && s.btnDisabled,
+            pressed && { opacity: 0.8 },
+          ]}
+          onPress={handleSendResetCode}
+          disabled={!resetEmail || forgotBusy}
+        >
+          {forgotBusy ? (
+            <ActivityIndicator color={colors.primaryForeground} />
+          ) : (
+            <Text style={s.btnText}>Send Reset Code</Text>
+          )}
+        </Pressable>
+
+        <Pressable onPress={closeForgotPassword}>
+          <Text style={[s.link, { textAlign: "center" }]}>Back to sign in</Text>
+        </Pressable>
+      </ScrollView>
+    );
+  }
+
+  // ── Forgot password: enter code + new password step ──────────────────────
+  if (forgotStep === "reset") {
+    return (
+      <ScrollView
+        contentContainerStyle={[s.container, { paddingTop: Platform.OS === "web" ? 80 : insets.top + 60 }]}
+        keyboardShouldPersistTaps="handled"
+      >
+        <Text style={s.logoText}>Opinion</Text>
+        <Text style={s.title}>Check your email</Text>
+        <Text style={s.subtitle}>Enter the code sent to {resetEmail} and choose a new password</Text>
+
+        <Text style={s.label}>Reset code</Text>
+        <ThemedInput
+          style={s.input}
+          placeholder="6-digit code"
+          placeholderTextColor={colors.mutedForeground}
+          value={resetCode}
+          onChangeText={(t) => { setResetCode(t); clearError(); }}
+          keyboardType="numeric"
+          autoFocus
+          returnKeyType="next"
+        />
+
+        <Text style={s.label}>New password</Text>
+        <ThemedInput
+          style={s.input}
+          placeholder="Choose a new password"
+          placeholderTextColor={colors.mutedForeground}
+          value={newPassword}
+          onChangeText={(t) => { setNewPassword(t); clearError(); }}
+          secureTextEntry
+          autoComplete="new-password"
+          returnKeyType="done"
+          onSubmitEditing={handleSubmitReset}
+        />
+
+        {errorMsg && <Text style={s.error}>{errorMsg}</Text>}
+
+        <Pressable
+          style={({ pressed }) => [
+            s.btn,
+            (!resetCode || !newPassword || forgotBusy) && s.btnDisabled,
+            pressed && { opacity: 0.8 },
+          ]}
+          onPress={handleSubmitReset}
+          disabled={!resetCode || !newPassword || forgotBusy}
+        >
+          {forgotBusy ? (
+            <ActivityIndicator color={colors.primaryForeground} />
+          ) : (
+            <Text style={s.btnText}>Reset Password</Text>
+          )}
+        </Pressable>
+
+        <Pressable onPress={handleResendResetCode}>
+          <Text style={[s.link, { textAlign: "center" }]}>Resend code</Text>
+        </Pressable>
+      </ScrollView>
+    );
+  }
 
   // ── MFA verification step ────────────────────────────────────────────────
   if (signIn.status === "needs_client_trust") {
@@ -280,6 +494,10 @@ export default function SignInScreen() {
       {errors?.fields?.password && (
         <Text style={s.error}>{errors.fields.password.message}</Text>
       )}
+
+      <Pressable onPress={openForgotPassword} style={{ alignSelf: "flex-end", marginBottom: 14, marginTop: -6 }}>
+        <Text style={s.link}>Forgot password?</Text>
+      </Pressable>
 
       {/* Caught sign-in errors shown here */}
       {errorMsg && fetchStatus !== "fetching" && (
