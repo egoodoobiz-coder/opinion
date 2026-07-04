@@ -1,3 +1,4 @@
+import { Platform } from "react-native";
 import * as SecureStore from "expo-secure-store";
 
 // Android's SecureStore (backed by EncryptedSharedPreferences on many devices)
@@ -23,7 +24,7 @@ async function clearChunks(key: string) {
   await SecureStore.deleteItemAsync(`${key}_chunk_count`, secureStoreOpts).catch(() => {});
 }
 
-export const tokenCache = {
+const nativeTokenCache = {
   async getToken(key: string): Promise<string | null> {
     try {
       const countRaw = await SecureStore.getItemAsync(`${key}_chunk_count`, secureStoreOpts);
@@ -62,3 +63,7 @@ export const tokenCache = {
     await SecureStore.setItemAsync(`${key}_chunk_count`, String(count), secureStoreOpts);
   },
 };
+
+// SecureStore only exists on native; on web Clerk manages its own storage
+// (same as @clerk/expo's default, which passes undefined outside native).
+export const tokenCache = Platform.OS === "web" ? undefined : nativeTokenCache;

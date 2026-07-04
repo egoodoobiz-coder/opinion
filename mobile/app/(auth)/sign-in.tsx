@@ -93,6 +93,13 @@ export default function SignInScreen() {
           },
         });
         if (finalizeError) setErrorMsg(clerkMessage(finalizeError));
+      } else if (signIn.status === "needs_new_password") {
+        setErrorMsg("This account requires a password reset. Tap 'Forgot password?' below to set a new one.");
+      } else if (signIn.status === "needs_second_factor") {
+        setErrorMsg("This account has two-factor authentication enabled, which this app doesn't support yet.");
+      } else if (signIn.status && signIn.status !== "needs_client_trust") {
+        // Surface any other unexpected state instead of silently doing nothing
+        setErrorMsg(`Sign-in needs another step (${signIn.status}). Please report this.`);
       }
     } catch (err: any) {
       setErrorMsg(clerkMessage(err));
