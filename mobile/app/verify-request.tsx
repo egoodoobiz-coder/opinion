@@ -145,7 +145,10 @@ export default function VerifyRequestScreen() {
   return (
     <KeyboardAvoidingView style={s.container} behavior={Platform.OS === "ios" ? "padding" : undefined}>
       <View style={[s.header, { paddingTop: Platform.OS === "web" ? 20 : insets.top + 8 }]}>
-        <Pressable style={({ pressed }) => [s.iconBtn, pressed && { opacity: 0.6 }]} onPress={() => router.back()}>
+        <Pressable
+          style={({ pressed }) => [s.iconBtn, pressed && { opacity: 0.6 }]}
+          onPress={() => (router.canGoBack() ? router.back() : router.replace("/(tabs)/profile"))}
+        >
           <Icon name="x" size={20} color={colors.mutedForeground} />
         </Pressable>
         <Text style={s.headerTitle}>Apply for a Voice</Text>

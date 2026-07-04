@@ -2,7 +2,7 @@ import { useAuth } from "@clerk/expo";
 import { Icon } from "@/components/Icon";
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -40,6 +40,27 @@ interface AdminRow {
   grantedAt: string | null;
 }
 
+// Alert.alert (and its button callbacks) are no-ops on react-native-web,
+// so route dialogs through window.confirm / window.alert there.
+function confirmDialog(title: string, message: string, confirmLabel: string, destructive: boolean, onConfirm: () => void) {
+  if (Platform.OS === "web") {
+    if (typeof window !== "undefined" && window.confirm(`${title}\n\n${message}`)) onConfirm();
+  } else {
+    Alert.alert(title, message, [
+      { text: "Cancel", style: "cancel" },
+      { text: confirmLabel, style: destructive ? "destructive" : "default", onPress: onConfirm },
+    ]);
+  }
+}
+
+function notify(title: string, message: string) {
+  if (Platform.OS === "web") {
+    if (typeof window !== "undefined") window.alert(`${title}: ${message}`);
+  } else {
+    Alert.alert(title, message);
+  }
+}
+
 export default function AdminScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -59,13 +80,21 @@ export default function AdminScreen() {
   const [revoking, setRevoking] = useState<string | null>(null);
   const [filter, setFilter] = useState<"pending" | "all">("pending");
 
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  // getToken's identity can change across renders; going through a ref keeps
+  // authHeaders/load stable so the mount effect doesn't refetch in a loop.
+  const getTokenRef = useRef(getToken);
+  getTokenRef.current = getToken;
+
   const authHeaders = useCallback(async () => {
-    const token = await getToken();
+    const token = await getTokenRef.current();
     return { "Content-Type": "application/json", Authorization: `Bearer ${token ?? ""}` };
-  }, [getToken]);
+  }, []);
 
   const load = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
+    setLoadError(null);
     try {
       const h = await authHeaders();
       const [reqRes, admRes] = await Promise.all([
@@ -73,13 +102,14 @@ export default function AdminScreen() {
         fetch(`${API_URL}/api/admin/admins`, { headers: h }),
       ]);
       if (reqRes.status === 403) {
-        Alert.alert("Access Denied", "You don't have admin privileges.", [{ text: "Go Back", onPress: () => router.back() }]);
+        setLoadError("Access denied — you don't have admin privileges.");
         return;
       }
       if (reqRes.ok) { const d = await reqRes.json(); setRequests(d.requests ?? []); }
+      else { setLoadError(`Could not load requests (HTTP ${reqRes.status}).`); }
       if (admRes.ok) { const d = await admRes.json(); setAdminList(d.admins ?? []); }
     } catch {
-      Alert.alert("Error", "Could not load data. Check your connection.");
+      setLoadError("Could not load data. Check your connection.");
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -95,13 +125,12 @@ export default function AdminScreen() {
     const cfg = VOICE_CONFIG[req.requestedVoiceType as keyof typeof VOICE_CONFIG];
     const typeLabel = cfg?.label ?? req.requestedVoiceType;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    Alert.alert(
+    confirmDialog(
       `${action === "approve" ? "Approve" : "Reject"} request?`,
       `${action === "approve" ? "Approve" : "Reject"} ${typeLabel} voice for ${name}?`,
-      [
-        { text: "Cancel", style: "cancel" },
-        { text: action === "approve" ? "Approve" : "Reject", style: action === "reject" ? "destructive" : "default", onPress: () => handleAction(id, action) },
-      ]
+      action === "approve" ? "Approve" : "Reject",
+      action === "reject",
+      () => handleAction(id, action)
     );
   }
 
@@ -117,7 +146,7 @@ export default function AdminScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setRequests((prev) => prev.map((r) => r.id === id ? { ...r, status: action === "approve" ? "approved" : "rejected", reviewedAt: new Date().toISOString() } : r));
     } catch (err: any) {
-      Alert.alert("Error", err.message ?? "Could not process request.");
+      notify("Error", err.message ?? "Could not process request.");
     } finally {
       setActionId(null);
     }
@@ -136,25 +165,24 @@ export default function AdminScreen() {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         setGrantEmail("");
         load(true);
-        Alert.alert("Done", `Admin access granted to ${email}`);
+        notify("Done", `Admin access granted to ${email}`);
       } else {
-        Alert.alert("Error", d.error ?? "Failed to grant access");
+        notify("Error", d.error ?? "Failed to grant access");
       }
     } catch {
-      Alert.alert("Error", "Network error");
+      notify("Error", "Network error");
     } finally {
       setGranting(false);
     }
   }
 
   function confirmRevoke(targetId: string, email: string | null) {
-    Alert.alert(
+    confirmDialog(
       "Revoke Admin",
       `Remove admin access from ${email ?? targetId}?`,
-      [
-        { text: "Cancel", style: "cancel" },
-        { text: "Revoke", style: "destructive", onPress: () => doRevoke(targetId) },
-      ]
+      "Revoke",
+      true,
+      () => doRevoke(targetId)
     );
   }
 
@@ -168,10 +196,10 @@ export default function AdminScreen() {
         setAdminList((prev) => prev.filter((a) => a.userId !== targetId));
       } else {
         const d = await res.json().catch(() => ({}));
-        Alert.alert("Error", d.error ?? "Failed");
+        notify("Error", d.error ?? "Failed");
       }
     } catch {
-      Alert.alert("Error", "Network error");
+      notify("Error", "Network error");
     } finally {
       setRevoking(null);
     }
@@ -215,6 +243,17 @@ export default function AdminScreen() {
 
       {loading ? (
         <View style={s.center}><ActivityIndicator color={colors.primary} /></View>
+      ) : loadError ? (
+        <View style={[s.center, { gap: 12, paddingHorizontal: 32 }]}>
+          <Icon name="alert-circle" size={32} color={colors.no} />
+          <Text style={{ fontSize: 14, color: colors.mutedForeground, textAlign: "center", lineHeight: 20 }}>{loadError}</Text>
+          <Pressable
+            style={({ pressed }) => [{ backgroundColor: colors.primary, borderRadius: 10, paddingHorizontal: 20, paddingVertical: 10 }, pressed && { opacity: 0.8 }]}
+            onPress={() => load()}
+          >
+            <Text style={{ color: "#fff", fontWeight: "700", fontSize: 13 }}>Retry</Text>
+          </Pressable>
+        </View>
       ) : (
         <ScrollView
           contentContainerStyle={s.scroll}
