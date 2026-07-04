@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { createClerkClient } from "@clerk/backend";
+import { createClerkClient, verifyToken } from "@clerk/backend";
 import { db } from "@workspace/db";
 import { verificationRequests, users, admins } from "@workspace/db/schema";
 import { eq, desc } from "drizzle-orm";
@@ -20,7 +20,8 @@ async function getAuthenticatedUserId(req: any): Promise<string | null> {
     const authHeader = req.headers.authorization;
     if (!authHeader?.startsWith("Bearer ")) return null;
     const token = authHeader.slice(7);
-    const payload = await clerk.verifyToken(token);
+    // @clerk/backend v3 removed verifyToken from the client — it's a standalone export
+    const payload = await verifyToken(token, { secretKey: process.env.CLERK_SECRET_KEY });
     return payload.sub ?? null;
   } catch {
     return null;

@@ -44,6 +44,8 @@ export default function VerifyRequestScreen() {
   const [loading, setLoading] = useState(true);
   const [existingRequest, setExistingRequest] = useState<VerifyRequest | null>(null);
   const [apiUnavailable, setApiUnavailable] = useState(false);
+  // Alert.alert is a no-op on web, so errors must render inline
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const fetchMyRequest = useCallback(async () => {
     if (!API_URL) {
@@ -79,9 +81,10 @@ export default function VerifyRequestScreen() {
 
   async function handleSubmit() {
     if (!user) return;
+    setSubmitError(null);
 
     if (!API_URL) {
-      Alert.alert("Unavailable", "The backend is not configured. Set EXPO_PUBLIC_API_URL to submit a request.");
+      setSubmitError("The backend is not configured. Set EXPO_PUBLIC_API_URL to submit a request.");
       return;
     }
 
@@ -89,11 +92,15 @@ export default function VerifyRequestScreen() {
     setSubmitting(true);
     try {
       const token = await getToken();
+      if (!token) {
+        setSubmitError("Couldn't get a login token — please sign out and sign in again.");
+        return;
+      }
       const res = await fetch(`${API_URL}/api/admin/verify-requests`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token ?? ""}`,
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
           userEmail: user.emailAddresses[0]?.emailAddress,
@@ -110,19 +117,19 @@ export default function VerifyRequestScreen() {
         if (data.status && data.requestedVoiceType) {
           setExistingRequest({ id: "", status: data.status as RequestStatus, requestedVoiceType: data.requestedVoiceType as VoiceType });
         } else {
-          Alert.alert("Already submitted", "You already have a pending or approved request.");
+          setSubmitError("You already have a pending or approved request.");
         }
         return;
       }
 
-      if (!res.ok) throw new Error(data.error ?? "Failed to submit");
+      if (!res.ok) throw new Error(data.error ? `${data.error} (HTTP ${res.status})` : `Failed to submit (HTTP ${res.status})`);
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setExistingRequest(
         data.request ?? { id: "", status: "pending" as RequestStatus, requestedVoiceType: voiceType, requestedAt: new Date().toISOString() }
       );
     } catch (err: any) {
-      Alert.alert("Error", err.message ?? "Could not submit request. Try again.");
+      setSubmitError(err.message ?? "Could not submit request. Try again.");
     } finally {
       setSubmitting(false);
     }
@@ -262,6 +269,13 @@ export default function VerifyRequestScreen() {
             </View>
           </View>
 
+          {submitError && (
+            <View style={s.submitErrorBox}>
+              <Icon name="alert-circle" size={14} color={colors.no} />
+              <Text style={s.submitErrorText}>{submitError}</Text>
+            </View>
+          )}
+
           <Pressable
             style={({ pressed }) => [s.submitBtn, { backgroundColor: VOICE_CONFIG[voiceType].color }, apiUnavailable && s.submitBtnDisabled, pressed && !apiUnavailable && { opacity: 0.85 }]}
             onPress={handleSubmit}
@@ -327,6 +341,13 @@ const styles = (colors: ReturnType<typeof useColors>, insets: any) =>
       paddingHorizontal: 14, paddingVertical: 12,
     },
     accountEmail: { flex: 1, fontSize: 14, color: colors.foreground },
+    submitErrorBox: {
+      flexDirection: "row", alignItems: "center", gap: 8,
+      backgroundColor: colors.no + "18", borderRadius: 10,
+      borderWidth: 1, borderColor: colors.no + "44",
+      paddingHorizontal: 12, paddingVertical: 10,
+    },
+    submitErrorText: { flex: 1, fontSize: 13, color: colors.no, lineHeight: 18 },
     submitBtn: { borderRadius: 14, paddingVertical: 15, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
     submitBtnDisabled: { backgroundColor: colors.muted },
     submitBtnText: { fontSize: 16, fontWeight: "700", color: "#fff" },
