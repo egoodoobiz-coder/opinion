@@ -11,19 +11,19 @@
     "splash": {
       "image": "./assets/images/icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#0f0a1e"
+      "backgroundColor": "#000000"
     },
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.akshay.opinion"
     },
     "android": {
-      "backgroundColor": "#0f0a1e",
+      "backgroundColor": "#000000",
       "package": "com.akshay.opinion",
       "versionCode": 1,
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/icon.png",
-        "backgroundColor": "#0f0a1e"
+        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "backgroundColor": "#000000"
       }
     },
     "web": {

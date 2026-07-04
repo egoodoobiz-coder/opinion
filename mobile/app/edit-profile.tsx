@@ -17,6 +17,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import ThemedInput from "@/components/ThemedInput";
 import { useColors } from "@/hooks/useColors";
+import { goBack } from "@/lib/nav";
 
 const AGE_RANGES = ["Under 18", "18–24", "25–34", "35–44", "45–54", "55–64", "65+"];
 const GENDERS = ["Male", "Female", "Non-binary", "Prefer not to say"];
@@ -92,7 +93,7 @@ export default function EditProfileScreen() {
       }
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      router.back();
+      goBack(router, "/(tabs)/profile");
     } catch (err: any) {
       const msg =
         err?.errors?.[0]?.longMessage ??
@@ -132,7 +133,7 @@ export default function EditProfileScreen() {
       <View style={[s.header, { paddingTop: Platform.OS === "web" ? 20 : insets.top + 8 }]}>
         <Pressable
           style={({ pressed }) => [s.iconBtn, pressed && { opacity: 0.6 }]}
-          onPress={() => router.back()}
+          onPress={() => goBack(router, "/(tabs)/profile")}
         >
           <Icon name="x" size={20} color={colors.mutedForeground} />
         </Pressable>

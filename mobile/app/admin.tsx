@@ -18,6 +18,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import ThemedInput from "@/components/ThemedInput";
 import { useColors } from "@/hooks/useColors";
 import { VOICE_CONFIG } from "@/constants/voiceTypes";
+import { goBack } from "@/lib/nav";
 
 type RequestStatus = "pending" | "approved" | "rejected";
 type Tab = "requests" | "admins";
@@ -214,7 +215,7 @@ export default function AdminScreen() {
     <View style={s.container}>
       {/* Header */}
       <View style={[s.header, { paddingTop: Platform.OS === "web" ? 20 : insets.top + 8 }]}>
-        <Pressable style={({ pressed }) => [s.iconBtn, pressed && { opacity: 0.6 }]} onPress={() => router.back()}>
+        <Pressable style={({ pressed }) => [s.iconBtn, pressed && { opacity: 0.6 }]} onPress={() => goBack(router, "/(tabs)/profile")}>
           <Icon name="arrow-left" size={20} color={colors.mutedForeground} />
         </Pressable>
         <View style={s.headerCenter}>
@@ -329,7 +330,7 @@ export default function AdminScreen() {
                     </View>
                     <View style={s.adminInfo}>
                       <Text style={s.adminEmail} numberOfLines={1}>{a.userEmail ?? a.userId}</Text>
-                      {a.grantedAt && <Text style={s.adminDate}>Admin since {new Date(a.grantedAt).toLocaleDateString()}</Text>}
+                      {a.grantedAt && <Text style={s.adminDate}>Admin since {new Date(a.grantedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</Text>}
                     </View>
                     <Pressable
                       style={({ pressed }) => [s.revokeBtn, pressed && { opacity: 0.7 }]}
@@ -392,7 +393,7 @@ function RequestCard({ req, actionId, onAction, colors, s }: {
 
       <View style={s.cardBottom}>
         <Text style={s.dateText}>
-          {req.requestedAt ? new Date(req.requestedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : ""}
+          {req.requestedAt ? new Date(req.requestedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : ""}
         </Text>
 
         {req.status === "pending" ? (
@@ -418,7 +419,7 @@ function RequestCard({ req, actionId, onAction, colors, s }: {
             <Text style={[s.statusChipText, req.status === "approved" ? s.statusApprovedText : s.statusRejectedText]}>
               {req.status === "approved" ? "Approved" : "Rejected"}
             </Text>
-            {req.reviewedAt ? <Text style={s.reviewedAt}>{new Date(req.reviewedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</Text> : null}
+            {req.reviewedAt ? <Text style={s.reviewedAt}>{new Date(req.reviewedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</Text> : null}
           </View>
         )}
       </View>

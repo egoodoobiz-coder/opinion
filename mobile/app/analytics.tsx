@@ -14,6 +14,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useApp, type VotingType } from "@/context/AppContext";
 import { VOICE_CONFIG } from "@/constants/voiceTypes";
 import { useColors } from "@/hooks/useColors";
+import { goBack } from "@/lib/nav";
 
 const VOTE_TYPE_LABELS: Record<VotingType, string> = {
   yesno: "Yes / No",
@@ -95,7 +96,7 @@ export default function AnalyticsScreen() {
     return (
       <View style={s.container}>
         <View style={[s.header, { paddingTop: Platform.OS === "web" ? 16 : insets.top + 4 }]}>
-          <Pressable onPress={() => router.back()} hitSlop={12}>
+          <Pressable onPress={() => goBack(router, "/(tabs)/profile")} hitSlop={12}>
             <Icon name="arrow-left" size={22} color={colors.foreground} />
           </Pressable>
           <Text style={s.headerTitle}>Analytics</Text>
@@ -116,7 +117,7 @@ export default function AnalyticsScreen() {
   return (
     <View style={s.container}>
       <View style={[s.header, { paddingTop: Platform.OS === "web" ? 16 : insets.top + 4 }]}>
-        <Pressable onPress={() => router.back()} hitSlop={12}>
+        <Pressable onPress={() => goBack(router, "/(tabs)/profile")} hitSlop={12}>
           <Icon name="arrow-left" size={22} color={colors.foreground} />
         </Pressable>
         <Text style={s.headerTitle}>Analytics</Text>

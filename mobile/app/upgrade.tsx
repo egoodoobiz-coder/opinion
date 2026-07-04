@@ -16,6 +16,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
+import { goBack } from "@/lib/nav";
 
 type Plan = {
   id: string;
@@ -116,7 +117,7 @@ export default function UpgradeScreen() {
         Alert.alert(
           "Welcome to Premium!",
           `Your ${plan.name} account is now active.`,
-          [{ text: "Awesome!", onPress: () => router.back() }]
+          [{ text: "Awesome!", onPress: () => goBack(router, "/(tabs)/profile") }]
         );
         setPendingPlan(null);
         return;
@@ -147,7 +148,7 @@ export default function UpgradeScreen() {
         Alert.alert(
           "Welcome to Premium!",
           `Your ${plan.name} account is now active.`,
-          [{ text: "Awesome!", onPress: () => router.back() }]
+          [{ text: "Awesome!", onPress: () => goBack(router, "/(tabs)/profile") }]
         );
         setPendingPlan(null);
         return;
@@ -220,7 +221,7 @@ export default function UpgradeScreen() {
           Alert.alert(
             "Payment confirmed!",
             `Welcome to ${pendingPlan.name} Premium. Your account is now verified.`,
-            [{ text: "Let's go!", onPress: () => router.back() }]
+            [{ text: "Let's go!", onPress: () => goBack(router, "/(tabs)/profile") }]
           );
           setPendingPlan(null);
           setPendingSessionId(null);
@@ -251,7 +252,7 @@ export default function UpgradeScreen() {
           });
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
           Alert.alert("Payment confirmed!", "Your premium account is now active.", [
-            { text: "Great!", onPress: () => router.back() },
+            { text: "Great!", onPress: () => goBack(router, "/(tabs)/profile") },
           ]);
           setPendingPlan(null);
           return;
@@ -278,7 +279,7 @@ export default function UpgradeScreen() {
       <View style={[s.header, { paddingTop: Platform.OS === "web" ? 20 : insets.top + 8 }]}>
         <Pressable
           style={({ pressed }) => [s.closeBtn, pressed && { opacity: 0.6 }]}
-          onPress={() => router.back()}
+          onPress={() => goBack(router, "/(tabs)/profile")}
         >
           <Icon name="x" size={20} color={colors.mutedForeground} />
         </Pressable>

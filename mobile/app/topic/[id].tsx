@@ -19,6 +19,7 @@ import StarRating from "@/components/StarRating";
 import { CATEGORY_CONFIG } from "@/constants/categories";
 import { useApp, type DemoBreakdown } from "@/context/AppContext";
 import { useColors } from "@/hooks/useColors";
+import { goBack } from "@/lib/nav";
 
 const COMMENT_MAX_LENGTH = 500;
 
@@ -83,7 +84,7 @@ export default function TopicDetailScreen() {
           Topic not found
         </Text>
         <Pressable
-          onPress={() => router.back()}
+          onPress={() => goBack(router, "/(tabs)")}
           style={({ pressed }) => [{ opacity: pressed ? 0.6 : 1, marginTop: 4 }]}
         >
           <Text style={{ color: colors.primary, fontWeight: "700", fontSize: 14 }}>
@@ -124,7 +125,7 @@ export default function TopicDetailScreen() {
         ]}
       >
         <Pressable
-          onPress={() => router.back()}
+          onPress={() => goBack(router, "/(tabs)")}
           style={({ pressed }) => [s.backBtn, pressed && { opacity: 0.6 }]}
         >
           <Icon name="arrow-left" size={20} color={colors.foreground} />

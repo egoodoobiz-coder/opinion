@@ -199,7 +199,7 @@ export default function VerifyRequestScreen() {
               {existingRequest.requestedAt && (
                 <View style={s.detailRow}>
                   <Text style={s.detailLabel}>Submitted</Text>
-                  <Text style={s.detailValue}>{new Date(existingRequest.requestedAt).toLocaleDateString()}</Text>
+                  <Text style={s.detailValue}>{new Date(existingRequest.requestedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</Text>
                 </View>
               )}
               <View style={s.detailRow}>

@@ -20,6 +20,7 @@ import { ALL_CATEGORIES, CATEGORY_CONFIG } from "@/constants/categories";
 import { useApp, type Category, type VotingType, type UserDemographics } from "@/context/AppContext";
 import { useColors } from "@/hooks/useColors";
 import { DRAFT_KEY } from "@/constants/draft";
+import { goBack } from "@/lib/nav";
 
 interface DraftState {
   title: string;
@@ -200,7 +201,7 @@ export default function CreateScreen() {
         accountType
       );
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      router.back();
+      goBack(router, "/(tabs)");
     } catch (err: any) {
       Alert.alert("Error", err?.message ?? "Could not create topic. Please try again.");
     } finally {
@@ -219,7 +220,7 @@ export default function CreateScreen() {
         ]}
       >
         <Pressable
-          onPress={() => router.back()}
+          onPress={() => goBack(router, "/(tabs)")}
           style={({ pressed }) => [s.backBtn, pressed && { opacity: 0.6 }]}
         >
           <Icon name="x" size={22} color={colors.foreground} />
