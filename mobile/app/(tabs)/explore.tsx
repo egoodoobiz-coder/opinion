@@ -5,6 +5,7 @@ import {
   FlatList,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -23,6 +24,7 @@ export default function ExploreScreen() {
   const { topics, userVotes } = useApp();
   const [query, setQuery] = useState("");
   const [activeCategory, setActiveCategory] = useState<Category | null>(null);
+  const [sortOrder, setSortOrder] = useState<"newest" | "oldest">("newest");
 
   const trimmed = query.trim();
   const isHashtagSearch = trimmed.startsWith("#") && trimmed.length > 1;
@@ -64,8 +66,12 @@ export default function ExploreScreen() {
       );
     }
 
+    list.sort((a, b) =>
+      sortOrder === "newest" ? b.createdAt - a.createdAt : a.createdAt - b.createdAt
+    );
+
     return list;
-  }, [topics, activeCategory, trimmed, isHashtagSearch, hashtagQuery]);
+  }, [topics, activeCategory, trimmed, isHashtagSearch, hashtagQuery, isPostNumberSearch, hashtagNumber, sortOrder]);
 
   // Show results whenever there's any query OR a category is selected
   const showResults = !!trimmed || !!activeCategory;
@@ -119,34 +125,97 @@ export default function ExploreScreen() {
         )}
       </View>
 
-      {/* Category grid */}
-      <View style={s.catGrid}>
-        {ALL_CATEGORIES.map((cat) => {
-          const cfg = CATEGORY_CONFIG[cat];
-          const active = activeCategory === cat;
-          const count = topics.filter((t) => t.category === cat).length;
-          return (
-            <Pressable
-              key={cat}
-              style={({ pressed }) => [
-                s.catTile,
-                active && {
-                  borderColor: cfg.color,
-                  backgroundColor: cfg.color + "22",
-                },
-                pressed && { opacity: 0.8 },
-              ]}
-              onPress={() => setActiveCategory(active ? null : cat)}
-            >
-              <Icon name={cfg.icon as any} size={18} color={cfg.color} />
-              <Text style={[s.catName, active && { color: cfg.color }]}>
-                {cfg.label}
-              </Text>
-              <Text style={s.catCount}>{count}</Text>
-            </Pressable>
-          );
-        })}
-      </View>
+      {/* Full category grid when browsing; collapses to a chip strip once
+          a category or search is active so results get the screen */}
+      {!showResults ? (
+        <View style={s.catGrid}>
+          {ALL_CATEGORIES.map((cat) => {
+            const cfg = CATEGORY_CONFIG[cat];
+            const active = activeCategory === cat;
+            const count = topics.filter((t) => t.category === cat).length;
+            return (
+              <Pressable
+                key={cat}
+                style={({ pressed }) => [
+                  s.catTile,
+                  active && {
+                    borderColor: cfg.color,
+                    backgroundColor: cfg.color + "22",
+                  },
+                  pressed && { opacity: 0.8 },
+                ]}
+                onPress={() => setActiveCategory(active ? null : cat)}
+              >
+                <Icon name={cfg.icon as any} size={18} color={cfg.color} />
+                <Text style={[s.catName, active && { color: cfg.color }]}>
+                  {cfg.label}
+                </Text>
+                <Text style={s.catCount}>{count}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      ) : (
+        <View style={s.compactBar}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={s.chipRow}
+          >
+            {ALL_CATEGORIES.map((cat) => {
+              const cfg = CATEGORY_CONFIG[cat];
+              const active = activeCategory === cat;
+              return (
+                <Pressable
+                  key={cat}
+                  style={[
+                    s.chip,
+                    active && { borderColor: cfg.color, backgroundColor: cfg.color + "22" },
+                  ]}
+                  onPress={() => setActiveCategory(active ? null : cat)}
+                >
+                  <Icon
+                    name={cfg.icon as any}
+                    size={12}
+                    color={active ? cfg.color : colors.mutedForeground}
+                  />
+                  <Text style={[s.chipText, active && { color: cfg.color, fontWeight: "700" }]}>
+                    {cfg.label}
+                  </Text>
+                  {active && <Icon name="x" size={11} color={cfg.color} />}
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+
+          <View style={s.resultsBar}>
+            <Text style={s.resultsCount}>
+              {results.length} {results.length === 1 ? "post" : "posts"}
+            </Text>
+            <View style={s.sortRow}>
+              {(["newest", "oldest"] as const).map((o) => {
+                const active = sortOrder === o;
+                return (
+                  <Pressable
+                    key={o}
+                    style={[s.sortChip, active && s.sortChipActive]}
+                    onPress={() => setSortOrder(o)}
+                  >
+                    <Icon
+                      name={o === "newest" ? "chevron-down" : "chevron-up"}
+                      size={11}
+                      color={active ? colors.primary : colors.mutedForeground}
+                    />
+                    <Text style={[s.sortChipText, active && s.sortChipTextActive]}>
+                      {o === "newest" ? "Newest" : "Oldest"}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
+        </View>
+      )}
 
       {/* Results */}
       {showResults && (
@@ -266,6 +335,54 @@ const styles = (colors: ReturnType<typeof useColors>, insets: any) =>
       textAlign: "center",
     },
     catCount: { fontSize: 10, color: colors.mutedForeground },
+    compactBar: {
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
+    chipRow: {
+      flexDirection: "row",
+      gap: 8,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+    },
+    chip: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 5,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      borderRadius: 100,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.card,
+    },
+    chipText: { fontSize: 12, color: colors.mutedForeground, fontWeight: "500" },
+    resultsBar: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingHorizontal: 16,
+      paddingBottom: 10,
+    },
+    resultsCount: { fontSize: 12, color: colors.mutedForeground, fontWeight: "600" },
+    sortRow: { flexDirection: "row", gap: 6 },
+    sortChip: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
+      paddingHorizontal: 10,
+      paddingVertical: 5,
+      borderRadius: 100,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.card,
+    },
+    sortChipActive: {
+      borderColor: colors.primary,
+      backgroundColor: colors.primary + "18",
+    },
+    sortChipText: { fontSize: 11, color: colors.mutedForeground, fontWeight: "600" },
+    sortChipTextActive: { color: colors.primary, fontWeight: "700" },
     list: { paddingHorizontal: 16, paddingTop: 8 },
     empty: { alignItems: "center", paddingTop: 60, gap: 8, paddingHorizontal: 32 },
     emptyTitle: { fontSize: 16, fontWeight: "600", color: colors.mutedForeground },
