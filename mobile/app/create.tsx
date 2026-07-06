@@ -30,6 +30,7 @@ interface DraftState {
   rankOptions: string[];
   aspectItems: string[];
   tagsInput: string;
+  linkInput?: string;
   targetAgeRange: string;
   targetGender: string;
   targetOccupation: string;
@@ -50,6 +51,7 @@ export default function CreateScreen() {
   const [rankOptions, setRankOptions] = useState<string[]>(["", ""]);
   const [aspectItems, setAspectItems] = useState<string[]>(["Service", "Punctuality", "Staff", "Cleanliness", "Price", "Quality"]);
   const [tagsInput, setTagsInput] = useState("");
+  const [linkInput, setLinkInput] = useState("");
   const [targetAgeRange, setTargetAgeRange] = useState("");
   const [targetGender, setTargetGender] = useState("");
   const [targetOccupation, setTargetOccupation] = useState("");
@@ -73,6 +75,7 @@ export default function CreateScreen() {
         setRankOptions(draft.rankOptions);
         setAspectItems(draft.aspectItems);
         setTagsInput(draft.tagsInput);
+        setLinkInput(draft.linkInput ?? "");
         setTargetAgeRange(draft.targetAgeRange);
         setTargetGender(draft.targetGender);
         setTargetOccupation(draft.targetOccupation);
@@ -93,6 +96,14 @@ export default function CreateScreen() {
     .split(/[\s,]+/)
     .map((t) => t.replace(/^#/, "").toLowerCase().replace(/[^a-z0-9]/g, ""))
     .filter(Boolean);
+
+  // Normalize a pasted link: add https:// when missing, reject obvious non-URLs
+  const normalizedLink = (() => {
+    const raw = linkInput.trim();
+    if (!raw) return undefined;
+    const withProto = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+    return /^https?:\/\/[^\s]+\.[^\s]{2,}/i.test(withProto) ? withProto : undefined;
+  })();
 
   function selectVotingType(vt: VotingType) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -145,7 +156,7 @@ export default function CreateScreen() {
     if (!isSignedIn) {
       const draft: DraftState = {
         title, description, category, votingType,
-        rankOptions, aspectItems, tagsInput,
+        rankOptions, aspectItems, tagsInput, linkInput,
         targetAgeRange, targetGender, targetOccupation,
       };
       AsyncStorage.setItem(DRAFT_KEY, JSON.stringify(draft)).finally(() => {
@@ -168,8 +179,8 @@ export default function CreateScreen() {
       return;
     }
     const isPremium = (user?.unsafeMetadata as any)?.isPremium === true;
-    const accountType = isPremium
-      ? (user?.unsafeMetadata as any)?.accountType
+    const voiceType = isPremium
+      ? (user?.unsafeMetadata as any)?.voiceType
       : undefined;
     const targetDemographics: UserDemographics | undefined =
       targetAgeRange || targetGender || targetOccupation
@@ -197,8 +208,9 @@ export default function CreateScreen() {
           aspects: needsAspects ? validAspects.map((a) => a.trim()) : undefined,
           targetDemographics,
           hashtags: parsedTags.length > 0 ? parsedTags : undefined,
+          linkUrl: normalizedLink,
         },
-        accountType
+        voiceType
       );
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       goBack(router, "/(tabs)");
@@ -294,6 +306,34 @@ export default function CreateScreen() {
                   <Text style={s.tagChipText}>#{tag}</Text>
                 </View>
               ))}
+            </View>
+          )}
+        </View>
+
+        {/* Link */}
+        <View style={s.field}>
+          <Text style={s.label}>Link</Text>
+          <Text style={s.sublabel}>Attach an article, place, or product for people to check out</Text>
+          <ThemedInput
+            style={s.input}
+            placeholder="https://example.com/article"
+            placeholderTextColor={colors.mutedForeground}
+            value={linkInput}
+            onChangeText={setLinkInput}
+            autoCapitalize="none"
+            autoCorrect={false}
+            keyboardType="url"
+          />
+          {linkInput.trim().length > 0 && (
+            <View style={s.linkStatusRow}>
+              <Icon
+                name={normalizedLink ? "check-circle" : "alert-circle"}
+                size={12}
+                color={normalizedLink ? colors.yes : colors.star}
+              />
+              <Text style={[s.linkStatusText, { color: normalizedLink ? colors.yes : colors.star }]}>
+                {normalizedLink ? normalizedLink : "That doesn't look like a valid link"}
+              </Text>
             </View>
           )}
         </View>
@@ -705,6 +745,13 @@ const styles = (colors: ReturnType<typeof useColors>, insets: any) =>
       color: colors.primary,
       fontWeight: "600",
     },
+    linkStatusRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 5,
+      paddingHorizontal: 4,
+    },
+    linkStatusText: { fontSize: 11, flex: 1 },
     catGrid: {
       flexDirection: "row",
       flexWrap: "wrap",

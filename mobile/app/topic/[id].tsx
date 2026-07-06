@@ -5,6 +5,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useMemo, useRef, useState } from "react";
 import {
   KeyboardAvoidingView,
+  Linking,
   Platform,
   Pressable,
   ScrollView,
@@ -145,6 +146,24 @@ export default function TopicDetailScreen() {
         <Text style={s.title}>{topic.title}</Text>
         {!!topic.description && (
           <Text style={s.desc}>{topic.description}</Text>
+        )}
+
+        {!!topic.linkUrl && (
+          <Pressable
+            style={({ pressed }) => [s.linkCard, pressed && { opacity: 0.7 }]}
+            onPress={() => Linking.openURL(topic.linkUrl!)}
+          >
+            <View style={s.linkCardIcon}>
+              <Icon name="globe" size={16} color={colors.primary} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={s.linkCardHost} numberOfLines={1}>
+                {topic.linkUrl.replace(/^https?:\/\//i, "").split("/")[0]}
+              </Text>
+              <Text style={s.linkCardUrl} numberOfLines={1}>{topic.linkUrl}</Text>
+            </View>
+            <Icon name="external-link" size={15} color={colors.mutedForeground} />
+          </Pressable>
         )}
 
         {/* ── Yes / No ──────────────────────────────────────────────────── */}
@@ -619,6 +638,26 @@ const styles = (colors: ReturnType<typeof useColors>, insets: any) =>
     content: { padding: 16, gap: 20 },
     title: { fontSize: 22, fontWeight: "800", color: colors.foreground, lineHeight: 30 },
     desc: { fontSize: 15, color: colors.mutedForeground, lineHeight: 22 },
+    linkCard: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12,
+      backgroundColor: colors.card,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 14,
+      padding: 12,
+    },
+    linkCardIcon: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: colors.primary + "22",
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    linkCardHost: { fontSize: 14, fontWeight: "700", color: colors.primary },
+    linkCardUrl: { fontSize: 11, color: colors.mutedForeground, marginTop: 1 },
     section: {
       backgroundColor: colors.card,
       borderRadius: 18,

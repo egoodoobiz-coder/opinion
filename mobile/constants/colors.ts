@@ -1,5 +1,5 @@
 const colors = {
-  light: {
+  dark: {
     text: "#e7e9ea",
     tint: "#1d9bf0",
 
@@ -39,6 +39,48 @@ const colors = {
 
     surface: "#0d0d0d",
     elevated: "#1c1c1c",
+  },
+
+  light: {
+    text: "#0f1419",
+    tint: "#1d9bf0",
+
+    background: "#ffffff",
+    foreground: "#0f1419",
+
+    card: "#ffffff",
+    cardForeground: "#0f1419",
+
+    primary: "#1d9bf0",
+    primaryForeground: "#ffffff",
+
+    secondary: "#eff3f4",
+    secondaryForeground: "#0f1419",
+
+    muted: "#eff3f4",
+    mutedForeground: "#536471",
+
+    accent: "#1d9bf0",
+    accentForeground: "#ffffff",
+
+    destructive: "#f4212e",
+    destructiveForeground: "#ffffff",
+
+    border: "#cfd9de",
+    input: "#cfd9de",
+
+    // App-specific tokens (darkened where needed for contrast on white)
+    yes: "#00a35c",
+    no: "#f4212e",
+    star: "#dda200",
+    rank: "#1d9bf0",
+    rankBg: "#e3eef7",
+    yesBg: "#d8f2e5",
+    noBg: "#fde0e2",
+    starBg: "#faf0d0",
+
+    surface: "#f7f9f9",
+    elevated: "#ffffff",
   },
 
   radius: 14,

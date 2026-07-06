@@ -66,6 +66,7 @@ export interface Topic {
   targetDemographics?: UserDemographics;
   demoBreakdown?: DemoBreakdown;
   hashtags?: string[];
+  linkUrl?: string;
   createdAt: number;
   createdBy: string;
   createdByName?: string;

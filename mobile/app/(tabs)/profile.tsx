@@ -24,7 +24,7 @@ import { VOICE_CONFIG } from "@/constants/voiceTypes";
 export default function ProfileScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { isSignedIn, isLoaded, signOut, getToken } = useAuth();
+  const { isSignedIn, isLoaded, getToken } = useAuth();
   const { user } = useUser();
   const router = useRouter();
   const { topics, userVotes, userId } = useApp();
@@ -239,11 +239,11 @@ export default function ProfileScreen() {
           <Pressable
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              signOut();
+              router.push("/settings");
             }}
             style={({ pressed }) => [s.signOutBtn, pressed && { opacity: 0.6 }]}
           >
-            <Icon name="log-out" size={18} color={colors.mutedForeground} />
+            <Icon name="settings" size={18} color={colors.mutedForeground} />
           </Pressable>
         </View>
 

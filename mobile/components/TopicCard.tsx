@@ -3,6 +3,7 @@ import { Icon } from "@/components/Icon";
 import { useRouter } from "expo-router";
 import React from "react";
 import {
+  Linking,
   Pressable,
   StyleSheet,
   Text,
@@ -147,6 +148,20 @@ export default function TopicCard({ topic, userVoted }: Props) {
         <Text style={s.desc} numberOfLines={1}>
           {topic.description}
         </Text>
+      ) : null}
+
+      {topic.linkUrl ? (
+        <Pressable
+          style={({ pressed }) => [s.linkChip, pressed && { opacity: 0.7 }]}
+          onPress={() => Linking.openURL(topic.linkUrl!)}
+          hitSlop={4}
+        >
+          <Icon name="globe" size={12} color={colors.primary} />
+          <Text style={s.linkChipText} numberOfLines={1}>
+            {topic.linkUrl.replace(/^https?:\/\//i, "").split("/")[0]}
+          </Text>
+          <Icon name="external-link" size={12} color={colors.mutedForeground} />
+        </Pressable>
       ) : null}
 
       <View style={s.stats}>
@@ -328,6 +343,21 @@ const styles = (colors: ReturnType<typeof useColors>) =>
       marginBottom: 4,
     },
     desc: { fontSize: 13, color: colors.mutedForeground, marginBottom: 10 },
+    linkChip: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      alignSelf: "flex-start",
+      maxWidth: "100%",
+      backgroundColor: colors.muted,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 100,
+      paddingHorizontal: 10,
+      paddingVertical: 5,
+      marginBottom: 10,
+    },
+    linkChipText: { fontSize: 12, fontWeight: "600", color: colors.primary, flexShrink: 1 },
     stats: { gap: 8, marginBottom: 10 },
     stat: { gap: 4 },
     yesnoBar: {
