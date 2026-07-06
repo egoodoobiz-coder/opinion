@@ -248,6 +248,7 @@ const styles = (colors: ReturnType<typeof useColors>, insets: any) =>
     },
     catTile: {
       width: "22%",
+      maxWidth: 130,
       aspectRatio: 1,
       backgroundColor: colors.card,
       borderRadius: 14,
