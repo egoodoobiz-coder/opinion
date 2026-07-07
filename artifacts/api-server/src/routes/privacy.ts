@@ -65,4 +65,37 @@ router.get("/privacy", (_req, res) => {
   res.type("html").send(PRIVACY_HTML);
 });
 
+const LANDING_HTML = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Opinion — ask anything, vote on everything</title>
+<style>
+  body { font-family: -apple-system, "Segoe UI", Roboto, sans-serif; background: #000; color: #e7e9ea; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: 24px; text-align: center; }
+  h1 { font-size: 44px; margin: 16px 0 8px; letter-spacing: -1px; }
+  p { color: #71767b; font-size: 17px; max-width: 420px; line-height: 1.6; }
+  .soon { display: inline-block; margin-top: 20px; background: #16181c; border: 1px solid #2f3336; border-radius: 100px; padding: 10px 22px; color: #1d9bf0; font-weight: 600; }
+  a { color: #536471; font-size: 13px; margin-top: 48px; text-decoration: none; }
+</style>
+</head>
+<body>
+<svg width="88" height="88" viewBox="0 0 100 100">
+  <circle cx="50" cy="50" r="42" fill="#16181c" stroke="#2f3336" stroke-width="1"/>
+  <path d="M50 8 A42 42 0 0 1 50 92 A21 21 0 0 1 50 50 A21 21 0 0 0 50 8 Z" fill="#00ba7c"/>
+  <path d="M50 8 A42 42 0 0 0 50 92 A21 21 0 0 0 50 50 A21 21 0 0 1 50 8 Z" fill="#f4212e"/>
+  <circle cx="50" cy="29" r="8" fill="#000"/>
+  <circle cx="50" cy="71" r="8" fill="#000"/>
+</svg>
+<h1>Opinion</h1>
+<p>Ask anything, vote on everything. Quick polls, ratings, and honest opinions.</p>
+<span class="soon">Coming soon to Google Play</span>
+<a href="/privacy">Privacy Policy</a>
+</body>
+</html>`;
+
+router.get("/", (_req, res) => {
+  res.type("html").send(LANDING_HTML);
+});
+
 export default router;
