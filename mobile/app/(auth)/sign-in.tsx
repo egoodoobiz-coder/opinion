@@ -96,7 +96,10 @@ export default function SignInScreen() {
       } else if (signIn.status === "needs_new_password") {
         setErrorMsg("This account requires a password reset. Tap 'Forgot password?' below to set a new one.");
       } else if (signIn.status === "needs_second_factor") {
-        setErrorMsg("This account has two-factor authentication enabled, which this app doesn't support yet.");
+        // New-device verification (or 2FA): Clerk wants an emailed code.
+        // Send it — the verify screen renders for this status below.
+        const { error: sendError } = await signIn.mfa.sendEmailCode();
+        if (sendError) setErrorMsg(clerkMessage(sendError));
       } else if (signIn.status && signIn.status !== "needs_client_trust") {
         // Surface any other unexpected state instead of silently doing nothing
         setErrorMsg(`Sign-in needs another step (${signIn.status}). Please report this.`);
@@ -369,8 +372,8 @@ export default function SignInScreen() {
     );
   }
 
-  // ── MFA verification step ────────────────────────────────────────────────
-  if (signIn.status === "needs_client_trust") {
+  // ── Verification code step (new-device trust or 2FA) ────────────────────
+  if (signIn.status === "needs_client_trust" || signIn.status === "needs_second_factor") {
     return (
       <View
         style={[
