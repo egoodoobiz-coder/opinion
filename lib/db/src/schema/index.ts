@@ -31,8 +31,18 @@ export const admins = pgTable("admins", {
   grantedAt: timestamp("granted_at").defaultNow(),
 });
 
+// Account deletion requests submitted via the public /delete-account page
+// (required by Google Play's data-deletion policy)
+export const deletionRequests = pgTable("deletion_requests", {
+  id: text("id").primaryKey(),
+  email: text("email").notNull(),
+  status: text("status").notNull().default("pending"), // "pending" | "completed"
+  requestedAt: timestamp("requested_at").defaultNow(),
+});
+
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 export type VerificationRequest = typeof verificationRequests.$inferSelect;
 export type InsertVerificationRequest = typeof verificationRequests.$inferInsert;
 export type Admin = typeof admins.$inferSelect;
+export type DeletionRequest = typeof deletionRequests.$inferSelect;

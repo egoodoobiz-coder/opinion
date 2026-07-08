@@ -47,8 +47,9 @@ const PRIVACY_HTML = `<!DOCTYPE html>
 </ul>
 
 <h2>Data retention and deletion</h2>
-<p>Account data is retained while your account exists. To delete your account and associated data, email
-<a href="mailto:akshay21790@gmail.com">akshay21790@gmail.com</a> from the address linked to your account and we will remove it within 30 days.</p>
+<p>Account data is retained while your account exists. To delete your account and associated data, use the
+<a href="/delete-account">account deletion page</a>, or email
+<a href="mailto:akshay21790@gmail.com">akshay21790@gmail.com</a> from the address linked to your account. Requests are completed within 30 days.</p>
 
 <h2>Children</h2>
 <p>Opinion is not directed at children under 13, and we do not knowingly collect personal information from them.</p>
