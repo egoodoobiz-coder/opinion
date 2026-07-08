@@ -15,11 +15,11 @@
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.akshay.opinion"
+      "bundleIdentifier": "app.askopinion"
     },
     "android": {
       "backgroundColor": "#000000",
-      "package": "com.akshay.opinion",
+      "package": "app.askopinion",
       "versionCode": 1,
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
