@@ -25,7 +25,7 @@
       },
       "env": {
         "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY": "pk_test_Z2xvcmlvdXMtb3J5eC0xOC5jbGVyay5hY2NvdW50cy5kZXYk",
-        "EXPO_PUBLIC_API_URL": "https://opinion-production-701c.up.railway.app"
+        "EXPO_PUBLIC_API_URL": "https://askopinion.app"
       }
     }
   },
