@@ -21,7 +21,34 @@ import { VOICE_CONFIG } from "@/constants/voiceTypes";
 import { goBack } from "@/lib/nav";
 
 type RequestStatus = "pending" | "approved" | "rejected";
-type Tab = "requests" | "admins";
+type Tab = "requests" | "reports" | "admins";
+
+type ReportStatus = "open" | "reviewed" | "actioned";
+
+interface ContentReport {
+  id: string;
+  reporterId: string | null;
+  contentType: "topic" | "comment";
+  contentId: string;
+  topicId: string | null;
+  reason: string;
+  details: string | null;
+  contentSnapshot: string | null;
+  authorName: string | null;
+  status: ReportStatus;
+  createdAt: string | null;
+  reviewedAt: string | null;
+}
+
+const REASON_LABELS: Record<string, string> = {
+  child_safety: "Child safety",
+  sexual_content: "Sexual content",
+  harassment: "Harassment",
+  hate_speech: "Hate speech",
+  violence: "Violence",
+  spam: "Spam or scam",
+  other: "Other",
+};
 
 interface VerifyReq {
   id: string;
@@ -72,7 +99,9 @@ export default function AdminScreen() {
 
   const [tab, setTab] = useState<Tab>("requests");
   const [requests, setRequests] = useState<VerifyReq[]>([]);
+  const [reports, setReports] = useState<ContentReport[]>([]);
   const [adminList, setAdminList] = useState<AdminRow[]>([]);
+  const [resolvingId, setResolvingId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [actionId, setActionId] = useState<string | null>(null);
@@ -98,9 +127,10 @@ export default function AdminScreen() {
     setLoadError(null);
     try {
       const h = await authHeaders();
-      const [reqRes, admRes] = await Promise.all([
+      const [reqRes, admRes, repRes] = await Promise.all([
         fetch(`${API_URL}/api/admin/verify-requests`, { headers: h }),
         fetch(`${API_URL}/api/admin/admins`, { headers: h }),
+        fetch(`${API_URL}/api/admin/reports`, { headers: h }),
       ]);
       if (reqRes.status === 403) {
         setLoadError("Access denied — you don't have admin privileges.");
@@ -109,6 +139,7 @@ export default function AdminScreen() {
       if (reqRes.ok) { const d = await reqRes.json(); setRequests(d.requests ?? []); }
       else { setLoadError(`Could not load requests (HTTP ${reqRes.status}).`); }
       if (admRes.ok) { const d = await admRes.json(); setAdminList(d.admins ?? []); }
+      if (repRes.ok) { const d = await repRes.json(); setReports(d.reports ?? []); }
     } catch {
       setLoadError("Could not load data. Check your connection.");
     } finally {
@@ -206,7 +237,42 @@ export default function AdminScreen() {
     }
   }
 
+  function confirmResolve(id: string, status: "reviewed" | "actioned") {
+    const rep = reports.find((r) => r.id === id);
+    if (!rep) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    confirmDialog(
+      status === "actioned" ? "Mark as actioned?" : "Dismiss report?",
+      status === "actioned"
+        ? "Confirms you removed the content and dealt with the account."
+        : "Marks this report reviewed with no action taken.",
+      status === "actioned" ? "Actioned" : "Dismiss",
+      status === "actioned",
+      () => resolveReport(id, status)
+    );
+  }
+
+  async function resolveReport(id: string, status: "reviewed" | "actioned") {
+    setResolvingId(id);
+    try {
+      const h = await authHeaders();
+      const res = await fetch(`${API_URL}/api/admin/reports/${id}`, {
+        method: "PATCH", headers: h, body: JSON.stringify({ status }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error ?? "Failed");
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setReports((prev) => prev.map((r) => r.id === id ? { ...r, status, reviewedAt: new Date().toISOString() } : r));
+    } catch (err: any) {
+      notify("Error", err.message ?? "Could not update report.");
+    } finally {
+      setResolvingId(null);
+    }
+  }
+
   const pendingCount = requests.filter((r) => r.status === "pending").length;
+  const openReports = reports.filter((r) => r.status === "open");
+  const childSafetyOpen = openReports.filter((r) => r.reason === "child_safety").length;
   const displayed = filter === "pending" ? requests.filter((r) => r.status === "pending") : requests;
 
   const s = styles(colors, insets);
@@ -233,6 +299,11 @@ export default function AdminScreen() {
         <Pressable style={[s.tab, tab === "requests" && s.tabActive]} onPress={() => setTab("requests")}>
           <Text style={[s.tabText, tab === "requests" && s.tabTextActive]}>
             Requests{pendingCount > 0 ? ` (${pendingCount})` : ""}
+          </Text>
+        </Pressable>
+        <Pressable style={[s.tab, tab === "reports" && s.tabActive]} onPress={() => setTab("reports")}>
+          <Text style={[s.tabText, tab === "reports" && s.tabTextActive]}>
+            Reports{openReports.length > 0 ? ` (${openReports.length})` : ""}
           </Text>
         </Pressable>
         <Pressable style={[s.tab, tab === "admins" && s.tabActive]} onPress={() => setTab("admins")}>
@@ -282,6 +353,38 @@ export default function AdminScreen() {
               ) : (
                 displayed.map((req) => (
                   <RequestCard key={req.id} req={req} actionId={actionId} onAction={confirmAction} colors={colors} s={s} />
+                ))
+              )}
+            </>
+          )}
+
+          {/* ── REPORTS TAB ── */}
+          {tab === "reports" && (
+            <>
+              {childSafetyOpen > 0 && (
+                <View style={s.csBanner}>
+                  <Icon name="alert-circle" size={16} color={colors.no} />
+                  <Text style={s.csBannerText}>
+                    {childSafetyOpen} open child safety report{childSafetyOpen === 1 ? "" : "s"} — review these first.
+                  </Text>
+                </View>
+              )}
+
+              {reports.length === 0 ? (
+                <View style={s.empty}>
+                  <Icon name="flag" size={40} color={colors.border} />
+                  <Text style={s.emptyText}>No reports</Text>
+                </View>
+              ) : (
+                reports.map((rep) => (
+                  <ReportCard
+                    key={rep.id}
+                    rep={rep}
+                    resolving={resolvingId === rep.id}
+                    onResolve={confirmResolve}
+                    colors={colors}
+                    s={s}
+                  />
                 ))
               )}
             </>
@@ -347,6 +450,82 @@ export default function AdminScreen() {
             </>
           )}
         </ScrollView>
+      )}
+    </View>
+  );
+}
+
+function ReportCard({ rep, resolving, onResolve, colors, s }: {
+  rep: ContentReport;
+  resolving: boolean;
+  onResolve: (id: string, status: "reviewed" | "actioned") => void;
+  colors: any;
+  s: any;
+}) {
+  const isChildSafety = rep.reason === "child_safety";
+  const isOpen = rep.status === "open";
+
+  return (
+    <View style={[s.card, isChildSafety && isOpen && { borderColor: colors.no }]}>
+      <View style={s.cardTop}>
+        <View style={[s.reasonPill, isChildSafety && { backgroundColor: colors.no + "22", borderColor: colors.no + "66" }]}>
+          <Icon name="flag" size={11} color={isChildSafety ? colors.no : colors.mutedForeground} />
+          <Text style={[s.reasonPillText, isChildSafety && { color: colors.no }]}>
+            {REASON_LABELS[rep.reason] ?? rep.reason}
+          </Text>
+        </View>
+        <Text style={s.reportType}>
+          {rep.contentType === "topic" ? "Poll" : "Comment"}
+          {rep.authorName ? ` · ${rep.authorName}` : ""}
+        </Text>
+      </View>
+
+      {/* Topics and comments live on the reporter's device — this snapshot is the only
+          copy the server has of what was actually reported. */}
+      {rep.contentSnapshot ? (
+        <View style={s.snapshotBox}>
+          <Text style={s.snapshotText}>{rep.contentSnapshot}</Text>
+        </View>
+      ) : (
+        <Text style={s.noSnapshot}>No content snapshot was sent with this report.</Text>
+      )}
+
+      {rep.details ? (
+        <View style={s.noteBox}>
+          <Text style={s.noteText}>{rep.details}</Text>
+        </View>
+      ) : null}
+
+      <View style={s.reportFooter}>
+        <Text style={s.reportMeta}>
+          {rep.createdAt ? new Date(rep.createdAt).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : ""}
+          {rep.reporterId ? " · signed in" : " · anonymous"}
+        </Text>
+        {!isOpen && (
+          <View style={s.resolvedPill}>
+            <Icon name="check" size={11} color={colors.yes} />
+            <Text style={s.resolvedPillText}>{rep.status === "actioned" ? "Actioned" : "Reviewed"}</Text>
+          </View>
+        )}
+      </View>
+
+      {isOpen && (
+        <View style={s.reportActions}>
+          <Pressable
+            style={({ pressed }) => [s.dismissBtn, pressed && { opacity: 0.75 }]}
+            onPress={() => onResolve(rep.id, "reviewed")}
+            disabled={resolving}
+          >
+            {resolving ? <ActivityIndicator size="small" color={colors.mutedForeground} /> : <Text style={s.dismissBtnText}>Dismiss</Text>}
+          </Pressable>
+          <Pressable
+            style={({ pressed }) => [s.actionedBtn, pressed && { opacity: 0.85 }]}
+            onPress={() => onResolve(rep.id, "actioned")}
+            disabled={resolving}
+          >
+            <Text style={s.actionedBtnText}>Mark actioned</Text>
+          </Pressable>
+        </View>
       )}
     </View>
   );
@@ -490,6 +669,45 @@ const styles = (colors: ReturnType<typeof useColors>, insets: any) =>
     voicePillText: { fontSize: 11, fontWeight: "700", color: colors.mutedForeground },
     noteBox: { backgroundColor: colors.muted, borderRadius: 10, padding: 10 },
     noteText: { fontSize: 13, color: colors.mutedForeground, lineHeight: 18 },
+    // Reports tab
+    csBanner: {
+      flexDirection: "row", alignItems: "center", gap: 8,
+      backgroundColor: colors.no + "18", borderWidth: 1, borderColor: colors.no + "55",
+      borderRadius: 12, padding: 12,
+    },
+    csBannerText: { flex: 1, fontSize: 13, fontWeight: "600", color: colors.no },
+    reasonPill: {
+      flexDirection: "row", alignItems: "center", gap: 5,
+      paddingHorizontal: 9, paddingVertical: 4, borderRadius: 100,
+      borderWidth: 1, borderColor: colors.border, backgroundColor: colors.muted,
+    },
+    reasonPillText: { fontSize: 11, fontWeight: "700", color: colors.mutedForeground },
+    reportType: { fontSize: 12, color: colors.mutedForeground, flexShrink: 1, textAlign: "right" },
+    snapshotBox: {
+      backgroundColor: colors.background, borderRadius: 10, padding: 10,
+      borderWidth: 1, borderColor: colors.border,
+    },
+    snapshotText: { fontSize: 13, color: colors.foreground, lineHeight: 19 },
+    noSnapshot: { fontSize: 12, fontStyle: "italic", color: colors.mutedForeground },
+    reportFooter: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
+    reportMeta: { fontSize: 11.5, color: colors.mutedForeground, flex: 1 },
+    resolvedPill: {
+      flexDirection: "row", alignItems: "center", gap: 4,
+      paddingHorizontal: 8, paddingVertical: 3, borderRadius: 100,
+      backgroundColor: colors.yes + "1e",
+    },
+    resolvedPillText: { fontSize: 11, fontWeight: "700", color: colors.yes },
+    reportActions: { flexDirection: "row", gap: 8 },
+    dismissBtn: {
+      flex: 1, alignItems: "center", justifyContent: "center", paddingVertical: 10,
+      borderRadius: 10, backgroundColor: colors.muted, borderWidth: 1, borderColor: colors.border,
+    },
+    dismissBtnText: { fontSize: 13, fontWeight: "600", color: colors.foreground },
+    actionedBtn: {
+      flex: 1.3, alignItems: "center", justifyContent: "center", paddingVertical: 10,
+      borderRadius: 10, backgroundColor: colors.no,
+    },
+    actionedBtnText: { fontSize: 13, fontWeight: "700", color: "#fff" },
     cardBottom: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
     dateText: { fontSize: 12, color: colors.mutedForeground },
     actionRow: { flexDirection: "row", gap: 8 },

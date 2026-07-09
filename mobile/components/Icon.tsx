@@ -50,7 +50,9 @@ import {
   Truck,
   User,
   UserCheck,
+  UserPlus,
   Users,
+  UserX,
   X,
   Zap,
 } from "lucide-react-native";
@@ -108,6 +110,8 @@ const ICON_MAP: Record<string, React.ComponentType<{ size?: number; color?: stri
   "truck": Truck,
   "user": User,
   "user-check": UserCheck,
+  "user-plus": UserPlus,
+  "user-x": UserX,
   "users": Users,
   "x": X,
   "zap": Zap,

@@ -15,6 +15,7 @@ import {
 } from "react-native";
 import ThemedInput from "@/components/ThemedInput";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import ReportDialog, { type ReportTarget } from "@/components/ReportDialog";
 import RankingVote from "@/components/RankingVote";
 import StarRating from "@/components/StarRating";
 import { CATEGORY_CONFIG } from "@/constants/categories";
@@ -37,6 +38,7 @@ export default function TopicDetailScreen() {
     voteRanking,
     voteAspect,
     addComment,
+    hideContent,
     userId,
   } = useApp();
   const { user } = useUser();
@@ -46,11 +48,32 @@ export default function TopicDetailScreen() {
 
   const [pendingRanking, setPendingRanking] = useState<string[] | null>(null);
   const [commentText, setCommentText] = useState("");
+  const [reportTarget, setReportTarget] = useState<ReportTarget | null>(null);
   const scrollRef = useRef<ScrollView>(null);
 
   // The current user ID — used to check if they are the topic creator
   const currentUserId = user?.id ?? userId;
   const isCreator = topic?.createdBy === currentUserId;
+
+  // Hiding a comment is safe while this screen is open. Hiding the topic itself would
+  // make `topic` undefined and swap in the "not found" branch — taking the report
+  // dialog with it before the user sees the confirmation. So defer that hide until
+  // the dialog closes, then leave the screen.
+  const [pendingTopicHide, setPendingTopicHide] = useState<string | null>(null);
+
+  function handleReported(contentId: string) {
+    if (reportTarget?.contentType === "topic") setPendingTopicHide(contentId);
+    else hideContent(contentId);
+  }
+
+  function closeReportDialog() {
+    setReportTarget(null);
+    if (pendingTopicHide) {
+      hideContent(pendingTopicHide);
+      setPendingTopicHide(null);
+      goBack(router, "/(tabs)");
+    }
+  }
 
   function submitComment() {
     const trimmed = commentText.trim();
@@ -135,6 +158,27 @@ export default function TopicDetailScreen() {
           <Icon name={cat.icon as any} size={12} color={cat.color} />
           <Text style={[s.catLabel, { color: cat.color }]}>{cat.label}</Text>
         </View>
+
+        <View style={{ flex: 1 }} />
+
+        {!isCreator && (
+          <Pressable
+            accessibilityLabel="Report this poll"
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              setReportTarget({
+                contentType: "topic",
+                contentId: topic.id,
+                contentSnapshot: [topic.title, topic.description].filter(Boolean).join("\n\n"),
+                authorName: topic.createdByName,
+              });
+            }}
+            hitSlop={8}
+            style={({ pressed }) => [s.reportBtn, pressed && { opacity: 0.6 }]}
+          >
+            <Icon name="flag" size={17} color={colors.mutedForeground} />
+          </Pressable>
+        )}
       </View>
 
       <ScrollView
@@ -488,6 +532,25 @@ export default function TopicDetailScreen() {
                 </View>
                 <Text style={s.commentText}>{c.text}</Text>
               </View>
+              {c.authorId !== currentUserId && (
+                <Pressable
+                  accessibilityLabel={`Report comment by ${c.authorName}`}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    setReportTarget({
+                      contentType: "comment",
+                      contentId: c.id,
+                      topicId: topic.id,
+                      contentSnapshot: c.text,
+                      authorName: c.authorName,
+                    });
+                  }}
+                  hitSlop={8}
+                  style={({ pressed }) => [s.commentReportBtn, pressed && { opacity: 0.6 }]}
+                >
+                  <Icon name="flag" size={13} color={colors.mutedForeground} />
+                </Pressable>
+              )}
             </View>
           ))}
         </View>
@@ -522,6 +585,12 @@ export default function TopicDetailScreen() {
           <Icon name="send" size={18} color={colors.primaryForeground} />
         </Pressable>
       </View>
+
+      <ReportDialog
+        target={reportTarget}
+        onClose={closeReportDialog}
+        onReported={handleReported}
+      />
     </KeyboardAvoidingView>
   );
 }
@@ -635,6 +704,13 @@ const styles = (colors: ReturnType<typeof useColors>, insets: any) =>
       borderRadius: 100,
     },
     catLabel: { fontSize: 12, fontWeight: "600" },
+    reportBtn: {
+      width: 34,
+      height: 34,
+      borderRadius: 17,
+      alignItems: "center",
+      justifyContent: "center",
+    },
     content: { padding: 16, gap: 20 },
     title: { fontSize: 22, fontWeight: "800", color: colors.foreground, lineHeight: 30 },
     desc: { fontSize: 15, color: colors.mutedForeground, lineHeight: 22 },
@@ -758,6 +834,7 @@ const styles = (colors: ReturnType<typeof useColors>, insets: any) =>
     commentAuthor: { fontSize: 13, fontWeight: "700", color: colors.foreground },
     commentTime: { fontSize: 11, color: colors.mutedForeground },
     commentText: { fontSize: 14, color: colors.foreground, lineHeight: 20 },
+    commentReportBtn: { padding: 4, marginTop: 2 },
     inputBar: {
       flexDirection: "row", alignItems: "flex-end", gap: 10,
       paddingHorizontal: 16, paddingTop: 10,

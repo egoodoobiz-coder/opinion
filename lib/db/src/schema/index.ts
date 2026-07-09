@@ -40,9 +40,33 @@ export const deletionRequests = pgTable("deletion_requests", {
   requestedAt: timestamp("requested_at").defaultNow(),
 });
 
+// In-app reports of topics or comments. Required by Google Play's User Generated
+// Content and child safety standards policies.
+//
+// Topics and comments currently live only in the reporter's device storage, so the
+// server cannot look the content up by id. The reporter's client sends a snapshot of
+// the text along with the report — without it a report is not actionable.
+export const contentReports = pgTable("content_reports", {
+  id: text("id").primaryKey(),
+  reporterId: text("reporter_id"), // null when reported while signed out
+  contentType: text("content_type").notNull(), // "topic" | "comment"
+  contentId: text("content_id").notNull(),
+  topicId: text("topic_id"), // parent topic when contentType = "comment"
+  reason: text("reason").notNull(), // see REPORT_REASONS in the API
+  details: text("details"),
+  contentSnapshot: text("content_snapshot"),
+  authorName: text("author_name"),
+  status: text("status").notNull().default("open"), // "open" | "reviewed" | "actioned"
+  createdAt: timestamp("created_at").defaultNow(),
+  reviewedBy: text("reviewed_by"),
+  reviewedAt: timestamp("reviewed_at"),
+});
+
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 export type VerificationRequest = typeof verificationRequests.$inferSelect;
 export type InsertVerificationRequest = typeof verificationRequests.$inferInsert;
 export type Admin = typeof admins.$inferSelect;
 export type DeletionRequest = typeof deletionRequests.$inferSelect;
+export type ContentReport = typeof contentReports.$inferSelect;
+export type InsertContentReport = typeof contentReports.$inferInsert;

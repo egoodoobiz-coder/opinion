@@ -1,8 +1,8 @@
 import { Router } from "express";
 import { createClerkClient, verifyToken } from "@clerk/backend";
 import { db } from "@workspace/db";
-import { verificationRequests, users, admins } from "@workspace/db/schema";
-import { eq, desc } from "drizzle-orm";
+import { verificationRequests, users, admins, contentReports } from "@workspace/db/schema";
+import { eq, desc, sql } from "drizzle-orm";
 import { randomUUID } from "crypto";
 import { logger } from "../lib/logger";
 
@@ -322,6 +322,59 @@ router.patch("/admin/verify-requests/:id", async (req: any, res: any) => {
     res.json({ success: true, status: newStatus });
   } catch (err) {
     logger.error({ err }, "verify-requests PATCH error");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// GET /admin/reports — moderation queue (admin only)
+router.get("/admin/reports", async (req: any, res: any) => {
+  try {
+    const userId = await getAuthenticatedUserId(req);
+    if (!userId) return res.status(401).json({ error: "Unauthorized" });
+    if (!(await checkIsAdmin(userId))) return res.status(403).json({ error: "Forbidden" });
+
+    // Unreviewed first, then child safety ahead of everything else, then newest.
+    const reports = await db
+      .select()
+      .from(contentReports)
+      .orderBy(
+        sql`(${contentReports.status} = 'open') desc`,
+        sql`(${contentReports.reason} = 'child_safety') desc`,
+        desc(contentReports.createdAt)
+      );
+
+    res.json({ reports });
+  } catch (err) {
+    logger.error({ err }, "admin/reports GET error");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// PATCH /admin/reports/:id — mark a report reviewed or actioned (admin only)
+router.patch("/admin/reports/:id", async (req: any, res: any) => {
+  try {
+    const adminUserId = await getAuthenticatedUserId(req);
+    if (!adminUserId) return res.status(401).json({ error: "Unauthorized" });
+    if (!(await checkIsAdmin(adminUserId))) return res.status(403).json({ error: "Forbidden" });
+
+    const { id } = req.params;
+    const { status } = req.body;
+    if (!["reviewed", "actioned"].includes(status)) {
+      return res.status(400).json({ error: "Invalid status" });
+    }
+
+    const [report] = await db.select().from(contentReports).where(eq(contentReports.id, id));
+    if (!report) return res.status(404).json({ error: "Report not found" });
+
+    await db
+      .update(contentReports)
+      .set({ status, reviewedBy: adminUserId, reviewedAt: new Date() })
+      .where(eq(contentReports.id, id));
+
+    logger.info({ reportId: id, status, adminUserId }, "Report resolved");
+    res.json({ success: true, status });
+  } catch (err) {
+    logger.error({ err }, "admin/reports PATCH error");
     res.status(500).json({ error: "Internal server error" });
   }
 });

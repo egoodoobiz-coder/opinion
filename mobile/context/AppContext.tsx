@@ -6,6 +6,7 @@ import React, {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useState,
 } from "react";
 
@@ -108,6 +109,8 @@ interface AppContextValue {
   followAccount: (userId: string, displayName: string) => void;
   unfollowAccount: (userId: string) => void;
   markAccountSeen: (userId: string) => void;
+  /** Hide a topic or comment from this device after the user reports it. */
+  hideContent: (contentId: string) => void;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -117,6 +120,7 @@ const VOTES_KEY = "rankit_votes";
 const USER_KEY = "rankit_user";
 const FOLLOWS_KEY = "opinion_follows_v1";
 const SEEN_KEY = "opinion_seen_v1";
+const HIDDEN_KEY = "opinion_hidden_v1";
 
 const SAMPLE_TOPICS: Topic[] = [
   {
@@ -303,6 +307,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [userId, setUserId] = useState<string>("");
   const [followedAccounts, setFollowedAccounts] = useState<string[]>([]);
   const [lastSeenTimestamp, setLastSeenTimestamp] = useState<Record<string, number>>({});
+  const [hiddenIds, setHiddenIds] = useState<string[]>([]);
   const [loaded, setLoaded] = useState(false);
   const { user } = useUser();
   const clerkUserId = user?.id;
@@ -312,16 +317,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     (async () => {
       try {
-        const [topicsRaw, votesRaw, userRaw, followsRaw, seenRaw] = await Promise.all([
+        const [topicsRaw, votesRaw, userRaw, followsRaw, seenRaw, hiddenRaw] = await Promise.all([
           AsyncStorage.getItem(TOPICS_KEY),
           AsyncStorage.getItem(VOTES_KEY),
           AsyncStorage.getItem(USER_KEY),
           AsyncStorage.getItem(FOLLOWS_KEY),
           AsyncStorage.getItem(SEEN_KEY),
+          AsyncStorage.getItem(HIDDEN_KEY),
         ]);
 
         if (followsRaw) { try { setFollowedAccounts(JSON.parse(followsRaw)); } catch {} }
         if (seenRaw) { try { setLastSeenTimestamp(JSON.parse(seenRaw)); } catch {} }
+        if (hiddenRaw) { try { setHiddenIds(JSON.parse(hiddenRaw)); } catch {} }
 
         let uid = userRaw;
         if (!uid) {
@@ -641,12 +648,35 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     [topics, saveTopics]
   );
 
+  const hideContent = useCallback((contentId: string) => {
+    setHiddenIds((prev) => {
+      if (prev.includes(contentId)) return prev;
+      const next = [...prev, contentId];
+      AsyncStorage.setItem(HIDDEN_KEY, JSON.stringify(next));
+      return next;
+    });
+  }, []);
+
+  // Reported content is filtered out here rather than at each call site, so the feed,
+  // explore, history and detail screens all hide it without needing to know about it.
+  const visibleTopics = useMemo(() => {
+    if (hiddenIds.length === 0) return topics;
+    const hidden = new Set(hiddenIds);
+    return topics
+      .filter((t) => !hidden.has(t.id))
+      .map((t) =>
+        t.comments.some((c) => hidden.has(c.id))
+          ? { ...t, comments: t.comments.filter((c) => !hidden.has(c.id)) }
+          : t
+      );
+  }, [topics, hiddenIds]);
+
   if (!loaded) return null;
 
   return (
     <AppContext.Provider
       value={{
-        topics,
+        topics: visibleTopics,
         userVotes,
         userId,
         userDemographics,
@@ -662,6 +692,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         followAccount,
         unfollowAccount,
         markAccountSeen,
+        hideContent,
       }}
     >
       {children}

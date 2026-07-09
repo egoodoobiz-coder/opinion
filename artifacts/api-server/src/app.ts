@@ -4,6 +4,7 @@ import pinoHttp from "pino-http";
 import router from "./routes";
 import privacyRouter from "./routes/privacy";
 import deleteAccountRouter from "./routes/deleteAccount";
+import childSafetyRouter from "./routes/childSafety";
 import { WebhookHandlers } from "./webhookHandlers";
 import { logger } from "./lib/logger";
 
@@ -80,5 +81,6 @@ app.use(express.urlencoded({ extended: true }));
 app.use("/api", router);
 app.use(privacyRouter);
 app.use(deleteAccountRouter);
+app.use(childSafetyRouter);
 
 export default app;
