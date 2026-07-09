@@ -40,6 +40,8 @@ const FORM_PAGE = page(
 <ul>
   <li>Polls and votes stored only on your device are removed by uninstalling the app.</li>
   <li>Deletion is permanent and cannot be undone.</li>
+  <li>Want specific data removed <em>without</em> closing your account (e.g. your demographics or a verification request)? Email
+      <a href="mailto:akshay21790@gmail.com?subject=Partial%20data%20deletion%20request">akshay21790@gmail.com</a> and describe what to remove — same 30-day turnaround.</li>
 </ul>
 <form method="POST" action="/delete-account">
   <input type="email" name="email" placeholder="you@example.com" required maxlength="254" />
