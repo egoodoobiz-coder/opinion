@@ -13,6 +13,7 @@ import {
 import ThemedInput from "@/components/ThemedInput";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import TopicCard from "@/components/TopicCard";
+import EmptyState from "@/components/EmptyState";
 import { ALL_CATEGORIES, CATEGORY_CONFIG } from "@/constants/categories";
 import { useApp, type Category } from "@/context/AppContext";
 import { useColors } from "@/hooks/useColors";
@@ -231,17 +232,17 @@ export default function ExploreScreen() {
           )}
           showsVerticalScrollIndicator={false}
           ListEmptyComponent={
-            <View style={s.empty}>
-              <Icon name="search" size={36} color={colors.border} />
-              <Text style={s.emptyTitle}>No results found</Text>
-              <Text style={s.emptySubtitle}>
-                {isPostNumberSearch
+            <EmptyState
+              icon="search"
+              title="No results found"
+              subtitle={
+                isPostNumberSearch
                   ? `No post with number #${hashtagNumber} found`
                   : isHashtagSearch
                   ? `No posts match "#${hashtagQuery}" — try a different tag or word`
-                  : "Try a different search term or browse by category"}
-              </Text>
-            </View>
+                  : "Try a different search term or browse by category"
+              }
+            />
           }
         />
       )}
@@ -384,14 +385,6 @@ const styles = (colors: ReturnType<typeof useColors>, insets: any) =>
     sortChipText: { fontSize: 11, color: colors.mutedForeground, fontWeight: "600" },
     sortChipTextActive: { color: colors.primary, fontWeight: "700" },
     list: { paddingHorizontal: 16, paddingTop: 8 },
-    empty: { alignItems: "center", paddingTop: 60, gap: 8, paddingHorizontal: 32 },
-    emptyTitle: { fontSize: 16, fontWeight: "600", color: colors.mutedForeground },
-    emptySubtitle: {
-      fontSize: 13,
-      color: colors.border,
-      textAlign: "center",
-      lineHeight: 19,
-    },
     defaultHint: {
       flex: 1,
       alignItems: "center",

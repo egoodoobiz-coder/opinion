@@ -12,6 +12,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import TopicCard from "@/components/TopicCard";
+import EmptyState from "@/components/EmptyState";
 import { ALL_CATEGORIES, CATEGORY_CONFIG } from "@/constants/categories";
 import { useUser } from "@clerk/expo";
 import { useApp, type Category } from "@/context/AppContext";
@@ -229,11 +230,13 @@ export default function FeedScreen() {
         showsVerticalScrollIndicator={false}
         scrollEnabled={!!filtered.length}
         ListEmptyComponent={
-          <View style={s.empty}>
-            <Icon name="inbox" size={48} color={colors.border} />
-            <Text style={s.emptyText}>No topics yet</Text>
-            <Text style={s.emptySubtext}>Be the first to share an opinion</Text>
-          </View>
+          <EmptyState
+            icon="inbox"
+            title="No topics yet"
+            subtitle="Be the first to share an opinion and see what everyone thinks."
+            actionLabel="Ask a question"
+            onAction={() => router.push("/create")}
+          />
         }
       />
 
@@ -338,19 +341,5 @@ const styles = (colors: ReturnType<typeof useColors>, insets: any) =>
     },
     list: {
       padding: 16,
-    },
-    empty: {
-      alignItems: "center",
-      paddingTop: 80,
-      gap: 8,
-    },
-    emptyText: {
-      fontSize: 18,
-      fontWeight: "700",
-      color: colors.mutedForeground,
-    },
-    emptySubtext: {
-      fontSize: 14,
-      color: colors.mutedForeground,
     },
   });

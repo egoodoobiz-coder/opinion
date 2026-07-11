@@ -12,6 +12,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import TopicCard from "@/components/TopicCard";
+import EmptyState from "@/components/EmptyState";
 import { useApp } from "@/context/AppContext";
 import { useColors } from "@/hooks/useColors";
 
@@ -136,17 +137,13 @@ export default function HistoryScreen() {
           activeData.length === 0 && s.listContentEmpty,
         ]}
         ListEmptyComponent={
-          <View style={s.emptyState}>
-            <Icon name={empty.icon} size={52} color={colors.border} />
-            <Text style={s.emptyTitle}>{empty.title}</Text>
-            <Text style={s.emptySubtitle}>{empty.subtitle}</Text>
-            <Pressable
-              style={({ pressed }) => [s.emptyBtn, pressed && { opacity: 0.8 }]}
-              onPress={empty.onPress}
-            >
-              <Text style={s.emptyBtnText}>{empty.action}</Text>
-            </Pressable>
-          </View>
+          <EmptyState
+            icon={empty.icon}
+            title={empty.title}
+            subtitle={empty.subtitle}
+            actionLabel={empty.action}
+            onAction={empty.onPress}
+          />
         }
         renderItem={({ item }) => (
           <TopicCard
@@ -229,39 +226,7 @@ const styles = (colors: ReturnType<typeof useColors>, insets: any) =>
       paddingBottom: Platform.OS === "web" ? 68 : insets.bottom + 56,
     },
     listContentEmpty: {
-      flex: 1,
-      justifyContent: "center",
-    },
-
-    emptyState: {
-      alignItems: "center",
-      paddingHorizontal: 40,
-      paddingVertical: 60,
-      gap: 8,
-    },
-    emptyTitle: {
-      fontSize: 17,
-      fontWeight: "600",
-      color: colors.foreground,
-      marginTop: 8,
-    },
-    emptySubtitle: {
-      fontSize: 14,
-      color: colors.mutedForeground,
-      textAlign: "center",
-      lineHeight: 20,
-    },
-    emptyBtn: {
-      marginTop: 16,
-      backgroundColor: colors.primary,
-      paddingHorizontal: 20,
-      paddingVertical: 10,
-      borderRadius: 20,
-    },
-    emptyBtnText: {
-      color: "#fff",
-      fontWeight: "600",
-      fontSize: 14,
+      flexGrow: 1,
     },
 
     signInPrompt: {
