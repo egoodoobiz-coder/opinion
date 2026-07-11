@@ -16,6 +16,8 @@ import {
 import ThemedInput from "@/components/ThemedInput";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import ReportDialog, { type ReportTarget } from "@/components/ReportDialog";
+import AnimatedBar from "@/components/AnimatedBar";
+import PressableScale from "@/components/PressableScale";
 import RankingVote from "@/components/RankingVote";
 import StarRating from "@/components/StarRating";
 import { CATEGORY_CONFIG } from "@/constants/categories";
@@ -223,20 +225,12 @@ export default function TopicDetailScreen() {
 
             {total > 0 && (
               <View style={s.yesnoResults}>
-                <View style={s.yesnoBar}>
-                  <View
-                    style={[
-                      s.yesBarFill,
-                      { flex: yesPercent, backgroundColor: colors.yes },
-                    ]}
-                  />
-                  <View
-                    style={[
-                      s.noBarFill,
-                      { flex: noPercent, backgroundColor: colors.no },
-                    ]}
-                  />
-                </View>
+                <AnimatedBar
+                  percent={yesPercent}
+                  color={colors.yes}
+                  trackColor={colors.no}
+                  height={10}
+                />
                 <View style={s.yesnoLabels}>
                   <View style={s.yesnoLabelRow}>
                     <View style={[s.dot, { backgroundColor: colors.yes }]} />
@@ -257,12 +251,9 @@ export default function TopicDetailScreen() {
             )}
 
             <View style={s.voteButtons}>
-              <Pressable
-                style={({ pressed }) => [
-                  s.yesBtn,
-                  userVote?.yesno === "yes" && s.yesBtnActive,
-                  pressed && { opacity: 0.8 },
-                ]}
+              <PressableScale
+                containerStyle={s.voteBtnContainer}
+                style={[s.yesBtn, userVote?.yesno === "yes" && s.yesBtnActive]}
                 onPress={() => {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                   voteYesNo(topic.id, "yes");
@@ -281,13 +272,10 @@ export default function TopicDetailScreen() {
                 >
                   Yes
                 </Text>
-              </Pressable>
-              <Pressable
-                style={({ pressed }) => [
-                  s.noBtn,
-                  userVote?.yesno === "no" && s.noBtnActive,
-                  pressed && { opacity: 0.8 },
-                ]}
+              </PressableScale>
+              <PressableScale
+                containerStyle={s.voteBtnContainer}
+                style={[s.noBtn, userVote?.yesno === "no" && s.noBtnActive]}
                 onPress={() => {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                   voteYesNo(topic.id, "no");
@@ -306,7 +294,7 @@ export default function TopicDetailScreen() {
                 >
                   No
                 </Text>
-              </Pressable>
+              </PressableScale>
             </View>
           </View>
         )}
@@ -476,14 +464,13 @@ export default function TopicDetailScreen() {
                     </View>
                     {aspectTotal > 0 && (
                       <View style={s.aspectBarWrap}>
-                        <View style={s.aspectBarBg}>
-                          <View
-                            style={[
-                              s.aspectBarFill,
-                              { width: `${upPct}%` as any, backgroundColor: colors.yes },
-                            ]}
-                          />
-                        </View>
+                        <AnimatedBar
+                          percent={upPct}
+                          color={colors.yes}
+                          trackColor={colors.no + "33"}
+                          height={5}
+                          style={{ flex: 1 }}
+                        />
                         <Text style={s.aspectPct}>{upPct}% 👍</Text>
                       </View>
                     )}
@@ -746,23 +733,21 @@ const styles = (colors: ReturnType<typeof useColors>, insets: any) =>
     sectionTitle: { fontSize: 15, fontWeight: "700", color: colors.foreground, flex: 1 },
     voteCount: { fontSize: 12, color: colors.mutedForeground },
     yesnoResults: { gap: 10 },
-    yesnoBar: { flexDirection: "row", height: 10, borderRadius: 5, overflow: "hidden" },
-    yesBarFill: { borderRadius: 5 },
-    noBarFill: { borderRadius: 5 },
     yesnoLabels: { flexDirection: "row", justifyContent: "space-between" },
     yesnoLabelRow: { flexDirection: "row", alignItems: "center", gap: 5 },
     dot: { width: 8, height: 8, borderRadius: 4 },
     percentText: { fontSize: 14, fontWeight: "700" },
     absCount: { fontSize: 12, color: colors.mutedForeground },
     voteButtons: { flexDirection: "row", gap: 12 },
+    voteBtnContainer: { flex: 1 },
     yesBtn: {
-      flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center",
+      flexDirection: "row", alignItems: "center", justifyContent: "center",
       gap: 8, paddingVertical: 14, borderRadius: 14, borderWidth: 2,
       borderColor: colors.yes, backgroundColor: (colors as any).yesBg ?? colors.muted,
     },
     yesBtnActive: { backgroundColor: colors.yes },
     noBtn: {
-      flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center",
+      flexDirection: "row", alignItems: "center", justifyContent: "center",
       gap: 8, paddingVertical: 14, borderRadius: 14, borderWidth: 2,
       borderColor: colors.no, backgroundColor: (colors as any).noBg ?? colors.muted,
     },
@@ -806,11 +791,6 @@ const styles = (colors: ReturnType<typeof useColors>, insets: any) =>
     aspectBtnDownActive: { backgroundColor: colors.no },
     aspectBtnLabel: { fontSize: 12, fontWeight: "700" },
     aspectBarWrap: { flexDirection: "row", alignItems: "center", gap: 8 },
-    aspectBarBg: {
-      flex: 1, height: 5, borderRadius: 3,
-      backgroundColor: colors.no + "33", overflow: "hidden",
-    },
-    aspectBarFill: { height: "100%", borderRadius: 3 },
     aspectPct: { fontSize: 11, color: colors.mutedForeground, width: 50, textAlign: "right" },
     commentsSection: { gap: 12, paddingTop: 4 },
     commentsSectionHeader: {

@@ -10,6 +10,7 @@ import {
   View,
 } from "react-native";
 import { useColors } from "@/hooks/useColors";
+import AnimatedBar from "@/components/AnimatedBar";
 import { useApp, type Topic } from "@/context/AppContext";
 import { CATEGORY_CONFIG } from "@/constants/categories";
 import { VOICE_CONFIG } from "@/constants/voiceTypes";
@@ -167,14 +168,12 @@ export default function TopicCard({ topic, userVoted }: Props) {
       <View style={s.stats}>
         {hasYesNo && yesPercent !== null && (
           <View style={s.stat}>
-            <View style={s.yesnoBar}>
-              <View
-                style={[
-                  s.yesBarFill,
-                  { width: `${yesPercent}%` as any, backgroundColor: colors.yes },
-                ]}
-              />
-            </View>
+            <AnimatedBar
+              percent={yesPercent}
+              color={colors.yes}
+              trackColor={colors.no + "44"}
+              height={6}
+            />
             <Text style={s.statLabel}>
               {yesPercent}% Yes · {total.toLocaleString()} votes
             </Text>
@@ -213,9 +212,13 @@ export default function TopicCard({ topic, userVoted }: Props) {
                   <Text style={s.aspectPreviewLabel} numberOfLines={1}>{aspect}</Text>
                   {upPct !== null ? (
                     <View style={s.aspectPreviewBarWrap}>
-                      <View style={s.aspectPreviewBar}>
-                        <View style={[s.aspectPreviewFill, { width: `${upPct}%` as any }]} />
-                      </View>
+                      <AnimatedBar
+                        percent={upPct}
+                        color={colors.yes}
+                        trackColor={colors.no + "33"}
+                        height={4}
+                        style={{ flex: 1 }}
+                      />
                       <Text style={s.aspectPreviewPct}>{upPct}%</Text>
                     </View>
                   ) : (
@@ -360,13 +363,6 @@ const styles = (colors: ReturnType<typeof useColors>) =>
     linkChipText: { fontSize: 12, fontWeight: "600", color: colors.primary, flexShrink: 1 },
     stats: { gap: 8, marginBottom: 10 },
     stat: { gap: 4 },
-    yesnoBar: {
-      height: 6,
-      borderRadius: 3,
-      backgroundColor: colors.no + "44",
-      overflow: "hidden",
-    },
-    yesBarFill: { height: "100%", borderRadius: 3 },
     statLabel: { fontSize: 12, color: colors.mutedForeground },
     ratingRow: { flexDirection: "row", alignItems: "center", gap: 4 },
     ratingText: { fontSize: 14, fontWeight: "700", color: colors.star },
@@ -379,14 +375,6 @@ const styles = (colors: ReturnType<typeof useColors>) =>
     aspectPreviewRow: { flexDirection: "row", alignItems: "center", gap: 8 },
     aspectPreviewLabel: { fontSize: 11, fontWeight: "600", color: colors.foreground, width: 72 },
     aspectPreviewBarWrap: { flex: 1, flexDirection: "row", alignItems: "center", gap: 5 },
-    aspectPreviewBar: {
-      flex: 1,
-      height: 4,
-      borderRadius: 2,
-      backgroundColor: colors.no + "33",
-      overflow: "hidden",
-    },
-    aspectPreviewFill: { height: "100%", borderRadius: 2, backgroundColor: colors.yes },
     aspectPreviewPct: { fontSize: 10, color: colors.mutedForeground, width: 26, textAlign: "right" },
     aspectPreviewNone: { fontSize: 10, color: colors.mutedForeground },
     authorRow: {
