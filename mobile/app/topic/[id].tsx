@@ -699,7 +699,7 @@ const styles = (colors: ReturnType<typeof useColors>, insets: any) =>
       justifyContent: "center",
     },
     content: { padding: 16, gap: 20 },
-    title: { fontSize: 22, fontWeight: "800", color: colors.foreground, lineHeight: 30 },
+    title: { fontSize: 22, fontWeight: "800", color: colors.foreground, lineHeight: 29, letterSpacing: -0.4 },
     desc: { fontSize: 15, color: colors.mutedForeground, lineHeight: 22 },
     linkCard: {
       flexDirection: "row",
