@@ -5,13 +5,15 @@ import {
   Inter_700Bold,
   useFonts,
 } from "@expo-google-fonts/inter";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { ClerkLoaded, ClerkProvider } from "@clerk/expo";
 import { tokenCache } from "@/lib/tokenCache";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Stack } from "expo-router";
+import { Stack, useRouter } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
-import React, { useEffect } from "react";
-import { Platform, Text, View } from "react-native";
+import React, { useEffect, useState } from "react";
+import { Platform, StyleSheet, Text, View } from "react-native";
+import { ONBOARDING_KEY } from "@/lib/onboarding";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -49,10 +51,48 @@ function AppShell({ children }: { children: React.ReactNode }) {
   );
 }
 
+// On first launch, send the user to the intro. Fail-safe: any storage error
+// just shows the app rather than blocking it. The mask avoids a flash of the
+// feed during the (fast) async read.
+function OnboardingGate({ children }: { children: React.ReactNode }) {
+  const router = useRouter();
+  const colors = useColors();
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    AsyncStorage.getItem(ONBOARDING_KEY)
+      .then((seen) => {
+        if (!active) return;
+        if (!seen) router.replace("/onboarding");
+        setReady(true);
+      })
+      .catch(() => {
+        if (active) setReady(true);
+      });
+    return () => {
+      active = false;
+    };
+  }, [router]);
+
+  return (
+    <View style={{ flex: 1 }}>
+      {children}
+      {!ready && (
+        <View
+          pointerEvents="none"
+          style={[StyleSheet.absoluteFill, { backgroundColor: colors.background }]}
+        />
+      )}
+    </View>
+  );
+}
+
 function RootLayoutNav() {
   return (
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+      <Stack.Screen name="onboarding" options={{ headerShown: false, animation: "fade" }} />
       <Stack.Screen
         name="(auth)"
         options={{ headerShown: false, presentation: "modal" }}
@@ -126,7 +166,9 @@ export default function RootLayout() {
                   <KeyboardProvider>
                     <AppProvider>
                       <AppShell>
-                        <RootLayoutNav />
+                        <OnboardingGate>
+                          <RootLayoutNav />
+                        </OnboardingGate>
                       </AppShell>
                     </AppProvider>
                   </KeyboardProvider>
