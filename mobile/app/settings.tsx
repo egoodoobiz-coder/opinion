@@ -5,7 +5,6 @@ import { useRouter } from "expo-router";
 import React from "react";
 import {
   Linking,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -14,6 +13,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Icon } from "@/components/Icon";
+import ScreenHeader from "@/components/ScreenHeader";
 import { useTheme, type ThemePreference } from "@/context/ThemeContext";
 import { useColors } from "@/hooks/useColors";
 import { goBack } from "@/lib/nav";
@@ -51,17 +51,11 @@ export default function SettingsScreen() {
 
   return (
     <View style={s.container}>
-      {/* Header */}
-      <View style={[s.header, { paddingTop: Platform.OS === "web" ? 20 : insets.top + 8 }]}>
-        <Pressable
-          style={({ pressed }) => [s.iconBtn, pressed && { opacity: 0.6 }]}
-          onPress={() => goBack(router, "/(tabs)/profile")}
-        >
-          <Icon name="x" size={20} color={colors.mutedForeground} />
-        </Pressable>
-        <Text style={s.headerTitle}>Settings</Text>
-        <View style={{ width: 36 }} />
-      </View>
+      <ScreenHeader
+        title="Settings"
+        variant="close"
+        onBack={() => goBack(router, "/(tabs)/profile")}
+      />
 
       <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
         {/* Appearance */}
@@ -155,13 +149,6 @@ export default function SettingsScreen() {
 const styles = (colors: ReturnType<typeof useColors>, insets: any) =>
   StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
-    header: {
-      flexDirection: "row", alignItems: "center", justifyContent: "space-between",
-      paddingHorizontal: 16, paddingBottom: 12,
-      borderBottomWidth: 1, borderBottomColor: colors.border,
-    },
-    headerTitle: { fontSize: 17, fontWeight: "700", color: colors.foreground },
-    iconBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.muted, alignItems: "center", justifyContent: "center" },
     scroll: { padding: 16, paddingBottom: insets.bottom + 40 },
     sectionLabel: {
       fontSize: 11, fontWeight: "700", color: colors.mutedForeground,

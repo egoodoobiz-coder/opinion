@@ -11,6 +11,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import ScreenHeader from "@/components/ScreenHeader";
 import { useApp, type VotingType } from "@/context/AppContext";
 import { VOICE_CONFIG } from "@/constants/voiceTypes";
 import { useColors } from "@/hooks/useColors";
@@ -95,13 +96,7 @@ export default function AnalyticsScreen() {
   if (!isPremium) {
     return (
       <View style={s.container}>
-        <View style={[s.header, { paddingTop: Platform.OS === "web" ? 16 : insets.top + 4 }]}>
-          <Pressable onPress={() => goBack(router, "/(tabs)/profile")} hitSlop={12}>
-            <Icon name="arrow-left" size={22} color={colors.foreground} />
-          </Pressable>
-          <Text style={s.headerTitle}>Analytics</Text>
-          <View style={{ width: 22 }} />
-        </View>
+        <ScreenHeader title="Analytics" onBack={() => goBack(router, "/(tabs)/profile")} />
         <View style={s.gateContainer}>
           <Icon name="bar-chart-2" size={52} color={colors.border} />
           <Text style={s.gateTitle}>Analytics unlocked with a Voice</Text>
@@ -116,18 +111,18 @@ export default function AnalyticsScreen() {
 
   return (
     <View style={s.container}>
-      <View style={[s.header, { paddingTop: Platform.OS === "web" ? 16 : insets.top + 4 }]}>
-        <Pressable onPress={() => goBack(router, "/(tabs)/profile")} hitSlop={12}>
-          <Icon name="arrow-left" size={22} color={colors.foreground} />
-        </Pressable>
-        <Text style={s.headerTitle}>Analytics</Text>
-        {voiceCfg && (
-          <View style={[s.voicePill, { backgroundColor: voiceCfg.color + "22", borderColor: voiceCfg.color + "55" }]}>
-            <Icon name={voiceCfg.icon} size={11} color={voiceCfg.color} />
-            <Text style={[s.voicePillText, { color: voiceCfg.color }]}>{voiceCfg.label}</Text>
-          </View>
-        )}
-      </View>
+      <ScreenHeader
+        title="Analytics"
+        onBack={() => goBack(router, "/(tabs)/profile")}
+        right={
+          voiceCfg ? (
+            <View style={[s.voicePill, { backgroundColor: voiceCfg.color + "22", borderColor: voiceCfg.color + "55" }]}>
+              <Icon name={voiceCfg.icon} size={11} color={voiceCfg.color} />
+              <Text style={[s.voicePillText, { color: voiceCfg.color }]}>{voiceCfg.label}</Text>
+            </View>
+          ) : undefined
+        }
+      />
 
       <ScrollView
         showsVerticalScrollIndicator={false}
@@ -317,16 +312,6 @@ function demoStyles(colors: ReturnType<typeof useColors>) {
 const styles = (colors: ReturnType<typeof useColors>, insets: any) =>
   StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
-    header: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "space-between",
-      paddingHorizontal: 16,
-      paddingBottom: 12,
-      borderBottomWidth: 1,
-      borderBottomColor: colors.border,
-    },
-    headerTitle: { fontSize: 18, fontWeight: "800", color: colors.foreground },
     voicePill: {
       flexDirection: "row",
       alignItems: "center",

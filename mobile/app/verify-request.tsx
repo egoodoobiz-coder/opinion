@@ -16,6 +16,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import ThemedInput from "@/components/ThemedInput";
+import ScreenHeader from "@/components/ScreenHeader";
 import { useColors } from "@/hooks/useColors";
 import { VOICE_CONFIG, ALL_VOICE_TYPES, type VoiceType } from "@/constants/voiceTypes";
 
@@ -144,16 +145,11 @@ export default function VerifyRequestScreen() {
 
   return (
     <KeyboardAvoidingView style={s.container} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-      <View style={[s.header, { paddingTop: Platform.OS === "web" ? 20 : insets.top + 8 }]}>
-        <Pressable
-          style={({ pressed }) => [s.iconBtn, pressed && { opacity: 0.6 }]}
-          onPress={() => (router.canGoBack() ? router.back() : router.replace("/(tabs)/profile"))}
-        >
-          <Icon name="x" size={20} color={colors.mutedForeground} />
-        </Pressable>
-        <Text style={s.headerTitle}>Apply for a Voice</Text>
-        <View style={{ width: 36 }} />
-      </View>
+      <ScreenHeader
+        title="Apply for a Voice"
+        variant="close"
+        onBack={() => (router.canGoBack() ? router.back() : router.replace("/(tabs)/profile"))}
+      />
 
       {apiUnavailable && !loading && (
         <View style={s.apiBanner}>
@@ -307,13 +303,6 @@ const styles = (colors: ReturnType<typeof useColors>, insets: any) =>
   StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
     center: { flex: 1, alignItems: "center", justifyContent: "center" },
-    header: {
-      flexDirection: "row", alignItems: "center", justifyContent: "space-between",
-      paddingHorizontal: 16, paddingBottom: 12,
-      borderBottomWidth: 1, borderBottomColor: colors.border,
-    },
-    headerTitle: { fontSize: 17, fontWeight: "700", color: colors.foreground },
-    iconBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.muted, alignItems: "center", justifyContent: "center" },
     apiBanner: {
       flexDirection: "row", alignItems: "center", gap: 8,
       marginHorizontal: 16, marginTop: 12, marginBottom: 4,
