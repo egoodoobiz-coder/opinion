@@ -1,5 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useUser } from "@clerk/expo";
+import { useUser, useAuth } from "@clerk/expo";
+import { useRouter } from "expo-router";
 import type { VoiceType } from "@/constants/voiceTypes";
 import React, {
   createContext,
@@ -7,6 +8,7 @@ import React, {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 
@@ -304,95 +306,124 @@ function applyDemoToBreakdown(
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [topics, setTopics] = useState<Topic[]>([]);
   const [userVotes, setUserVotes] = useState<Record<string, UserVote>>({});
-  const [userId, setUserId] = useState<string>("");
+  const [deviceId, setDeviceId] = useState<string>("");
   const [followedAccounts, setFollowedAccounts] = useState<string[]>([]);
   const [lastSeenTimestamp, setLastSeenTimestamp] = useState<Record<string, number>>({});
   const [hiddenIds, setHiddenIds] = useState<string[]>([]);
   const [loaded, setLoaded] = useState(false);
   const { user } = useUser();
+  const { getToken, isSignedIn } = useAuth();
+  const router = useRouter();
   const clerkUserId = user?.id;
 
+  // Signed-in users are identified by their Clerk id (matches topic.createdBy on
+  // the server); the device id is only a fallback for anonymous browsing.
+  const userId = clerkUserId ?? deviceId;
   const userDemographics: UserDemographics = (user?.unsafeMetadata as any)?.demographics ?? {};
 
+  const API_URL = process.env.EXPO_PUBLIC_API_URL ?? "";
+
+  // getToken's identity changes each render; a ref keeps the write helpers stable.
+  const getTokenRef = useRef(getToken);
+  getTokenRef.current = getToken;
+
+  const authHeaders = useCallback(async () => {
+    const token = await getTokenRef.current().catch(() => null);
+    return {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    };
+  }, []);
+
+  // Writes require sign-in (Option A). Returns false and sends the user to the
+  // sign-in screen when signed out, so callers can bail.
+  const requireAuth = useCallback((): boolean => {
+    if (isSignedIn) return true;
+    router.push("/(auth)/sign-in" as any);
+    return false;
+  }, [isSignedIn, router]);
+
+  // The shared feed — a public read, no auth needed. Both the app and the
+  // website read the same endpoint.
+  const loadTopics = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/topics`);
+      if (!res.ok) return;
+      const data = await res.json();
+      setTopics(Array.isArray(data.topics) ? data.topics : []);
+    } catch {
+      // Leave whatever's on screen; the feed's empty state covers a cold failure.
+    }
+  }, [API_URL]);
+
+  // Load device id + local-only prefs (follows/seen/hidden), then the feed.
   useEffect(() => {
     (async () => {
       try {
-        const [topicsRaw, votesRaw, userRaw, followsRaw, seenRaw, hiddenRaw] = await Promise.all([
-          AsyncStorage.getItem(TOPICS_KEY),
-          AsyncStorage.getItem(VOTES_KEY),
+        const [userRaw, followsRaw, seenRaw, hiddenRaw] = await Promise.all([
           AsyncStorage.getItem(USER_KEY),
           AsyncStorage.getItem(FOLLOWS_KEY),
           AsyncStorage.getItem(SEEN_KEY),
           AsyncStorage.getItem(HIDDEN_KEY),
         ]);
-
         if (followsRaw) { try { setFollowedAccounts(JSON.parse(followsRaw)); } catch {} }
         if (seenRaw) { try { setLastSeenTimestamp(JSON.parse(seenRaw)); } catch {} }
         if (hiddenRaw) { try { setHiddenIds(JSON.parse(hiddenRaw)); } catch {} }
 
         let uid = userRaw;
-        if (!uid) {
-          uid = generateId();
-          await AsyncStorage.setItem(USER_KEY, uid);
-        }
-        setUserId(uid);
+        if (!uid) { uid = generateId(); await AsyncStorage.setItem(USER_KEY, uid); }
+        setDeviceId(uid);
 
-        if (topicsRaw) {
-          try {
-            const parsed = JSON.parse(topicsRaw);
-            const migrated = parsed.map((t: any) => ({
-              ...t,
-              comments: t.comments ?? [],
-              aspectVotes: t.aspectVotes ?? {},
-              aspects: t.aspects ?? undefined,
-              demoBreakdown: t.demoBreakdown ?? {},
-              targetDemographics: t.targetDemographics ?? undefined,
-            }));
-            const needsNumbering = migrated.some((t: any) => !t.topicNumber);
-            if (needsNumbering) {
-              const sorted = [...migrated].sort((a: any, b: any) => a.createdAt - b.createdAt);
-              let counter = 1;
-              const numMap: Record<string, number> = {};
-              for (const t of sorted) numMap[t.id] = t.topicNumber ?? counter++;
-              const numbered = migrated.map((t: any) => ({ ...t, topicNumber: numMap[t.id] }));
-              setTopics(numbered);
-              await AsyncStorage.setItem(TOPICS_KEY, JSON.stringify(numbered));
-            } else {
-              setTopics(migrated);
-            }
-          } catch {
-            setTopics(SAMPLE_TOPICS);
-            await AsyncStorage.setItem(TOPICS_KEY, JSON.stringify(SAMPLE_TOPICS));
-          }
-        } else {
-          setTopics(SAMPLE_TOPICS);
-          await AsyncStorage.setItem(TOPICS_KEY, JSON.stringify(SAMPLE_TOPICS));
-        }
-
-        if (votesRaw) {
-          try {
-            setUserVotes(JSON.parse(votesRaw));
-          } catch {
-            await AsyncStorage.removeItem(VOTES_KEY);
-          }
-        }
-      } catch (e) {
-        setTopics(SAMPLE_TOPICS);
+        await loadTopics();
       } finally {
         setLoaded(true);
       }
     })();
-  }, []);
+  }, [loadTopics]);
 
-  const saveTopics = useCallback(async (updated: Topic[]) => {
-    setTopics(updated);
-    await AsyncStorage.setItem(TOPICS_KEY, JSON.stringify(updated));
-  }, []);
+  // The signed-in user's votes (so buttons show their choice). Re-runs on auth
+  // change — cleared on sign-out.
+  useEffect(() => {
+    (async () => {
+      if (!isSignedIn) { setUserVotes({}); return; }
+      try {
+        const res = await fetch(`${API_URL}/api/topics/me/votes`, { headers: await authHeaders() });
+        if (!res.ok) return;
+        const data = await res.json();
+        setUserVotes(data.votes ?? {});
+      } catch {}
+    })();
+  }, [isSignedIn, clerkUserId, API_URL, authHeaders]);
 
-  const saveVotes = useCallback(async (updated: Record<string, UserVote>) => {
-    setUserVotes(updated);
-    await AsyncStorage.setItem(VOTES_KEY, JSON.stringify(updated));
-  }, []);
+  // Optimistic setters (no local persistence — the server is the source of truth).
+  const saveTopics = useCallback((updated: Topic[]) => setTopics(updated), []);
+  const saveVotes = useCallback((updated: Record<string, UserVote>) => setUserVotes(updated), []);
+
+  // Reconcile one topic (and optionally the user's vote) with the server's
+  // authoritative response; on failure, revert to the pre-vote snapshot.
+  const postVote = useCallback(
+    async (topicId: string, body: any, snapTopics: Topic[], snapVotes: Record<string, UserVote>) => {
+      try {
+        const res = await fetch(`${API_URL}/api/topics/${topicId}/vote`, {
+          method: "POST",
+          headers: await authHeaders(),
+          body: JSON.stringify(body),
+        });
+        if (!res.ok) {
+          setTopics(snapTopics);
+          setUserVotes(snapVotes);
+          return;
+        }
+        const data = await res.json();
+        if (data.topic) setTopics((prev) => prev.map((t) => (t.id === topicId ? data.topic : t)));
+        if (data.userVote) setUserVotes((prev) => ({ ...prev, [topicId]: data.userVote }));
+      } catch {
+        setTopics(snapTopics);
+        setUserVotes(snapVotes);
+      }
+    },
+    [API_URL, authHeaders]
+  );
 
   const followAccount = useCallback(
     (uid: string, displayName: string) => {
@@ -443,15 +474,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       topic: Omit<Topic, "id" | "topicNumber" | "createdAt" | "yesCount" | "noCount" | "totalRating" | "ratingCount" | "rankingVotes" | "createdBy" | "createdByName" | "voiceType" | "comments" | "demoBreakdown">,
       voiceType?: VoiceType
     ) => {
-      const effectiveUserId = clerkUserId ?? userId;
+      if (!requireAuth()) return;
       const displayName = user?.fullName ?? user?.username ?? "Anonymous";
-      const nextNumber = topics.reduce((max, t) => Math.max(max, t.topicNumber ?? 0), 0) + 1;
-      const newTopic: Topic = {
+      const tempId = generateId();
+      // Optimistic: show it at the top of the feed immediately, then reconcile
+      // with the server's row (real id / topicNumber) or roll back on failure.
+      const optimistic: Topic = {
         ...topic,
-        id: generateId(),
-        topicNumber: nextNumber,
+        id: tempId,
+        topicNumber: topics.reduce((max, t) => Math.max(max, t.topicNumber ?? 0), 0) + 1,
         createdAt: Date.now(),
-        createdBy: effectiveUserId,
+        createdBy: clerkUserId ?? userId,
         createdByName: displayName,
         voiceType,
         yesCount: 0,
@@ -465,13 +498,42 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           ? Object.fromEntries((topic.aspects ?? []).map((a) => [a, { up: 0, down: 0 }]))
           : undefined,
       };
-      saveTopics([newTopic, ...topics]);
+      setTopics((prev) => [optimistic, ...prev]);
+      (async () => {
+        try {
+          const res = await fetch(`${API_URL}/api/topics`, {
+            method: "POST",
+            headers: await authHeaders(),
+            body: JSON.stringify({
+              title: topic.title,
+              description: topic.description,
+              category: topic.category,
+              votingType: topic.votingType,
+              rankingOptions: topic.rankingOptions,
+              aspects: topic.aspects,
+              hashtags: topic.hashtags,
+              linkUrl: topic.linkUrl,
+              targetDemographics: topic.targetDemographics,
+              createdByName: displayName,
+              voiceType,
+            }),
+          });
+          if (!res.ok) { setTopics((prev) => prev.filter((t) => t.id !== tempId)); return; }
+          const data = await res.json();
+          if (data.topic) setTopics((prev) => prev.map((t) => (t.id === tempId ? data.topic : t)));
+        } catch {
+          setTopics((prev) => prev.filter((t) => t.id !== tempId));
+        }
+      })();
     },
-    [topics, userId, clerkUserId, saveTopics]
+    [topics, userId, clerkUserId, user, requireAuth, API_URL, authHeaders]
   );
 
   const voteYesNo = useCallback(
     (topicId: string, vote: "yes" | "no") => {
+      if (!requireAuth()) return;
+      const snapTopics = topics;
+      const snapVotes = userVotes;
       const prev = userVotes[topicId];
       const wasYes = prev?.yesno === "yes";
       const wasNo = prev?.yesno === "no";
@@ -498,12 +560,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       };
       saveTopics(updated);
       saveVotes(newVotes);
+      postVote(topicId, { kind: "yesno", value: vote, voterDemo: userDemographics }, snapTopics, snapVotes);
     },
-    [topics, userVotes, userDemographics, saveTopics, saveVotes]
+    [topics, userVotes, userDemographics, saveTopics, saveVotes, requireAuth, postVote]
   );
 
   const voteRating = useCallback(
     (topicId: string, rating: number) => {
+      if (!requireAuth()) return;
+      const snapTopics = topics;
+      const snapVotes = userVotes;
       const prev = userVotes[topicId];
       const prevRating = prev?.rating;
       const prevDemo = prev?.voterDemo;
@@ -530,12 +596,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       };
       saveTopics(updated);
       saveVotes(newVotes);
+      postVote(topicId, { kind: "rating", value: rating, voterDemo: userDemographics }, snapTopics, snapVotes);
     },
-    [topics, userVotes, userDemographics, saveTopics, saveVotes]
+    [topics, userVotes, userDemographics, saveTopics, saveVotes, requireAuth, postVote]
   );
 
   const voteRanking = useCallback(
     (topicId: string, orderedIds: string[]) => {
+      if (!requireAuth()) return;
+      const snapTopics = topics;
+      const snapVotes = userVotes;
       const prev = userVotes[topicId];
       const prevRanking = prev?.ranking;
       const prevDemo = prev?.voterDemo;
@@ -573,12 +643,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       };
       saveTopics(updated);
       saveVotes(newVotes);
+      postVote(topicId, { kind: "ranking", value: orderedIds, voterDemo: userDemographics }, snapTopics, snapVotes);
     },
-    [topics, userVotes, userDemographics, saveTopics, saveVotes]
+    [topics, userVotes, userDemographics, saveTopics, saveVotes, requireAuth, postVote]
   );
 
   const voteAspect = useCallback(
     (topicId: string, aspect: string, choice: "up" | "down") => {
+      if (!requireAuth()) return;
+      const snapTopics = topics;
+      const snapVotes = userVotes;
       const prev = userVotes[topicId];
       const prevChoice = prev?.aspectChoices?.[aspect];
       const prevDemo = prev?.voterDemo;
@@ -621,8 +695,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       };
       saveTopics(updated);
       saveVotes(newVotes);
+      postVote(topicId, { kind: "aspect", aspect, choice, voterDemo: userDemographics }, snapTopics, snapVotes);
     },
-    [topics, userVotes, userDemographics, saveTopics, saveVotes]
+    [topics, userVotes, userDemographics, saveTopics, saveVotes, requireAuth, postVote]
   );
 
   const getUserVote = useCallback(
@@ -632,20 +707,50 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const addComment = useCallback(
     (topicId: string, text: string, authorId: string, authorName: string) => {
-      const comment: Comment = {
-        id: generateId(),
+      if (!requireAuth()) return;
+      const tempId = generateId();
+      const optimistic: Comment = {
+        id: tempId,
         topicId,
         text: text.trim(),
         authorId,
         authorName,
         createdAt: Date.now(),
       };
-      const updated = topics.map((t) =>
-        t.id === topicId ? { ...t, comments: [...t.comments, comment] } : t
+      setTopics((prev) =>
+        prev.map((t) => (t.id === topicId ? { ...t, comments: [...t.comments, optimistic] } : t))
       );
-      saveTopics(updated);
+      (async () => {
+        try {
+          const res = await fetch(`${API_URL}/api/topics/${topicId}/comments`, {
+            method: "POST",
+            headers: await authHeaders(),
+            body: JSON.stringify({ text: text.trim(), authorName }),
+          });
+          if (!res.ok) {
+            setTopics((prev) =>
+              prev.map((t) => (t.id === topicId ? { ...t, comments: t.comments.filter((c) => c.id !== tempId) } : t))
+            );
+            return;
+          }
+          const data = await res.json();
+          if (data.comment) {
+            setTopics((prev) =>
+              prev.map((t) =>
+                t.id === topicId
+                  ? { ...t, comments: t.comments.map((c) => (c.id === tempId ? data.comment : c)) }
+                  : t
+              )
+            );
+          }
+        } catch {
+          setTopics((prev) =>
+            prev.map((t) => (t.id === topicId ? { ...t, comments: t.comments.filter((c) => c.id !== tempId) } : t))
+          );
+        }
+      })();
     },
-    [topics, saveTopics]
+    [requireAuth, API_URL, authHeaders]
   );
 
   const hideContent = useCallback((contentId: string) => {
