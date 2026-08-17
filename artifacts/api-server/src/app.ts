@@ -5,6 +5,7 @@ import router from "./routes";
 import privacyRouter from "./routes/privacy";
 import deleteAccountRouter from "./routes/deleteAccount";
 import childSafetyRouter from "./routes/childSafety";
+import siteRouter from "./routes/site";
 import { WebhookHandlers } from "./webhookHandlers";
 import { logger } from "./lib/logger";
 
@@ -82,5 +83,6 @@ app.use("/api", router);
 app.use(privacyRouter);
 app.use(deleteAccountRouter);
 app.use(childSafetyRouter);
+app.use(siteRouter);
 
 export default app;
