@@ -2,8 +2,9 @@ import { useUser } from "@clerk/expo";
 import { Icon } from "@/components/Icon";
 import * as Haptics from "expo-haptics";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
+  Keyboard,
   KeyboardAvoidingView,
   Linking,
   Platform,
@@ -50,8 +51,21 @@ export default function TopicDetailScreen() {
 
   const [pendingRanking, setPendingRanking] = useState<string[] | null>(null);
   const [commentText, setCommentText] = useState("");
+  // Under Android edge-to-edge the navigation-bar inset is still reported while
+  // the keyboard is up, which would leave a gap above it. Drop it while typing.
+  const [keyboardUp, setKeyboardUp] = useState(false);
   const [reportTarget, setReportTarget] = useState<ReportTarget | null>(null);
   const scrollRef = useRef<ScrollView>(null);
+
+  useEffect(() => {
+    if (Platform.OS !== "android") return;
+    const show = Keyboard.addListener("keyboardDidShow", () => setKeyboardUp(true));
+    const hide = Keyboard.addListener("keyboardDidHide", () => setKeyboardUp(false));
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
 
   // The current user ID — used to check if they are the topic creator
   const currentUserId = user?.id ?? userId;
@@ -547,7 +561,12 @@ export default function TopicDetailScreen() {
       <View
         style={[
           s.inputBar,
-          { paddingBottom: Platform.OS === "ios" ? insets.bottom + 8 : 12 },
+          // Android has a bottom inset too (gesture pill or 3-button bar), and
+          // without it the composer sits underneath the navigation bar.
+          {
+            paddingBottom:
+              (keyboardUp ? 0 : insets.bottom) + (Platform.OS === "ios" ? 8 : 12),
+          },
         ]}
       >
         <ThemedInput
