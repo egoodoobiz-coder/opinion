@@ -5,6 +5,7 @@ import { desc, inArray } from "drizzle-orm";
 import { logger } from "../lib/logger";
 import {
   renderPage,
+  renderInsightsPage,
   type SiteTopic,
   type AspectVotes,
   type DemoBreakdown,
@@ -14,7 +15,7 @@ import {
 
 const router: IRouter = Router();
 
-let cache: { at: number; html: string } | null = null;
+const cache: Record<string, { at: number; html: string }> = {};
 const CACHE_MS = 15000;
 
 async function loadTopics(): Promise<SiteTopic[]> {
@@ -58,20 +59,26 @@ async function loadTopics(): Promise<SiteTopic[]> {
   }));
 }
 
-router.get("/", async (_req, res) => {
-  try {
-    if (cache && Date.now() - cache.at < CACHE_MS) {
-      return res.type("html").send(cache.html);
+function page(key: string, render: (list: SiteTopic[]) => string) {
+  return async (_req: any, res: any) => {
+    try {
+      const hit = cache[key];
+      if (hit && Date.now() - hit.at < CACHE_MS) {
+        return res.type("html").send(hit.html);
+      }
+      const html = render(await loadTopics());
+      cache[key] = { at: Date.now(), html };
+      res.type("html").send(html);
+    } catch (err) {
+      // These are Play-reviewer-facing URLs, so they must never 500 — fall back
+      // to the static shell with an empty feed.
+      logger.error({ err, key }, "site render error");
+      res.type("html").send(render([]));
     }
-    const html = renderPage(await loadTopics());
-    cache = { at: Date.now(), html };
-    res.type("html").send(html);
-  } catch (err) {
-    // The homepage must never 500 for a Play reviewer, so fall back to the
-    // static shell with an empty feed.
-    logger.error({ err }, "site render error");
-    res.type("html").send(renderPage([]));
-  }
-});
+  };
+}
+
+router.get("/", page("home", renderPage));
+router.get("/insights", page("insights", renderInsightsPage));
 
 export default router;
