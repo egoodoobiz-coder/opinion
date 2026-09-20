@@ -1,17 +1,24 @@
-// Mirrors mobile/constants/colors.ts (dark) and mobile/constants/categories.ts so
-// the site and the app read as one product.
+// The marketing/results site shares the app's vote-colour language (green yes,
+// red no, gold stars) and logo, but carries its own elevated "opinion newsroom"
+// identity: a deep-navy canvas with gradient depth and a cyan accent.
 const C = {
-  bg: "#000000",
-  card: "#16181c",
-  border: "#2f3336",
-  muted: "#202327",
-  fg: "#e7e9ea",
-  dim: "#71767b",
-  primary: "#1d9bf0",
-  yes: "#00ba7c",
-  no: "#f4212e",
+  bg: "#070a14",
+  bg2: "#0b1020",
+  card: "#0f1524",
+  cardHi: "#131b2e",
+  border: "#1e2740",
+  muted: "#182036",
+  fg: "#eef1f7",
+  dim: "#8b95ad",
+  primary: "#3b82f6",
+  accent: "#22d3ee",
+  accent2: "#818cf8",
+  yes: "#00d68f",
+  no: "#ff4d5e",
   star: "#ffd400",
 };
+
+const PLAY_URL = "https://play.google.com/store/apps/details?id=app.askopinion";
 
 const CATEGORY_CONFIG: Record<string, { label: string; color: string }> = {
   food: { label: "Food", color: "#f97316" },
@@ -60,6 +67,12 @@ export type AspectVotes = Record<string, { up: number; down: number }>;
 export type RankingVotes = Record<string, number[]>;
 export type RankingOption = { id: string; label: string };
 export type DemoBreakdown = Record<string, Record<string, number>>;
+
+export interface SiteComment {
+  authorName: string | null;
+  text: string;
+  createdAt: number;
+}
 
 export interface SiteTopic {
   id: string;
@@ -153,7 +166,7 @@ function renderRanking(t: SiteTopic): string {
         <span class="rank-pos${i === 0 ? " rank-top" : ""}">${i + 1}</span>
         <span class="rank-body">
           <span class="rank-label">${esc(o.label)}</span>
-          ${bar(width, i === 0 ? C.primary : "#3a5f78", C.muted, 6)}
+          ${bar(width, i === 0 ? C.accent : "#3a5f78", C.muted, 6)}
         </span>
         <span class="rank-avg">${(o.avg as number).toFixed(1)}</span>
       </li>`;
@@ -178,80 +191,85 @@ function renderAspects(t: SiteTopic): string {
   return `<ul class="aspects">${rows.join("")}</ul>`;
 }
 
-function renderDemographics(t: SiteTopic): string {
+function vizFor(t: SiteTopic): string {
+  return t.votingType === "yesno"
+    ? renderYesNo(t)
+    : t.votingType === "rating"
+      ? renderRating(t)
+      : t.votingType === "ranking"
+        ? renderRanking(t)
+        : renderAspects(t);
+}
+
+// Open demographic breakdown for a single topic (used on the analysis page).
+function renderDemoPanel(t: SiteTopic): string {
   const fields = Object.entries(t.demoBreakdown ?? {}).filter(([, buckets]) =>
     Object.values(buckets ?? {}).some((n) => n > 0),
   );
   if (fields.length === 0) return "";
-
   const FIELD_LABEL: Record<string, string> = {
     ageRange: "Age",
     gender: "Gender",
     country: "Country",
     occupation: "Work",
   };
-
-  return `<details class="demo">
-    <summary>Who voted</summary>
-    ${fields
-      .map(([field, buckets]) => {
-        const entries = Object.entries(buckets)
-          .filter(([, n]) => n > 0)
-          .sort((a, b) => b[1] - a[1]);
-        const total = entries.reduce((sum, [, n]) => sum + n, 0);
-        return `<div class="demo-field">
-          <span class="demo-name">${esc(FIELD_LABEL[field] ?? field)}</span>
-          <div class="demo-bars">${entries
-            .map(
-              ([bucket, n]) => `<div class="demo-row">
-                <span class="demo-bucket">${esc(bucket)}</span>
-                ${bar(Math.round((n / total) * 100), C.primary, C.muted, 5)}
-                <span class="demo-n">${Math.round((n / total) * 100)}%</span>
-              </div>`,
-            )
-            .join("")}</div>
-        </div>`;
-      })
-      .join("")}
-  </details>`;
+  return `<div class="demogrid">${fields
+    .map(([field, buckets]) => {
+      const entries = Object.entries(buckets)
+        .filter(([, n]) => n > 0)
+        .sort((a, b) => b[1] - a[1]);
+      const total = entries.reduce((sum, [, n]) => sum + n, 0);
+      return `<div class="demobox">
+        <h3>${esc(FIELD_LABEL[field] ?? field)}</h3>
+        ${entries
+          .map(([bucket, n]) => {
+            const pct = Math.round((n / total) * 100);
+            return `<div class="demo-row">
+              <span class="demo-bucket">${esc(bucket)}</span>
+              ${bar(pct, C.primary, C.muted, 6)}
+              <span class="demo-n">${pct}%</span>
+            </div>`;
+          })
+          .join("")}
+      </div>`;
+    })
+    .join("")}</div>`;
 }
 
-function renderCard(t: SiteTopic, index: number): string {
+function renderCard(t: SiteTopic, index: number, featured = false): string {
   const cat = CATEGORY_CONFIG[t.category] ?? CATEGORY_CONFIG.other;
-  const viz =
-    t.votingType === "yesno"
-      ? renderYesNo(t)
-      : t.votingType === "rating"
-        ? renderRating(t)
-        : t.votingType === "ranking"
-          ? renderRanking(t)
-          : renderAspects(t);
+  const viz = vizFor(t);
+  const meta = `${fmt(participation(t))} ${participation(t) === 1 ? "vote" : "votes"} · ${
+    t.commentCount === 1 ? "1 comment" : fmt(t.commentCount) + " comments"
+  }`;
 
-  const author = t.createdByName ?? "Opinion";
-  const tags = (t.hashtags ?? []).slice(0, 4);
+  const kicker = featured
+    ? `<span class="feat">◆ Most active</span>`
+    : t.topicNumber
+      ? `<span class="num">#${t.topicNumber}</span>`
+      : "";
 
-  return `<article class="card" data-cat="${esc(t.category)}" style="--i:${index}">
-    <header class="card-top">
+  const head = `<header class="card-top">
       <span class="cat" style="--c:${cat.color}"><i></i>${esc(cat.label)}</span>
       <span class="type">${esc(TYPE_LABEL[t.votingType] ?? t.votingType)}</span>
-      ${t.topicNumber ? `<span class="num">#${t.topicNumber}</span>` : ""}
-    </header>
-    <h3>${esc(t.title)}</h3>
-    ${t.description ? `<p class="desc">${esc(t.description)}</p>` : ""}
-    <div class="viz">${viz}</div>
-    ${tags.length ? `<div class="tags">${tags.map((h) => `<span>#${esc(h)}</span>`).join("")}</div>` : ""}
-    ${renderDemographics(t)}
-    ${
-      t.latestComment
-        ? `<blockquote class="quote">${esc(t.latestComment.text)}<cite>${esc(t.latestComment.authorName ?? "Anonymous")}</cite></blockquote>`
-        : ""
-    }
-    <footer class="card-foot">
-      <span>${esc(author)}</span>
-      <span>${t.commentCount === 1 ? "1 comment" : fmt(t.commentCount) + " comments"}</span>
-      <span>${formatDate(t.createdAt)}</span>
-    </footer>
-  </article>`;
+      ${kicker}
+    </header>`;
+  const title = `<h3>${esc(t.title)}</h3>`;
+  const desc = t.description ? `<p class="desc">${esc(t.description)}</p>` : "";
+  const foot = `<footer class="card-foot">
+      <span class="foot-meta">${meta}</span>
+      <span class="readmore">See the breakdown <b>&rarr;</b></span>
+    </footer>`;
+
+  const attrs = `href="/topic/${esc(t.id)}" data-cat="${esc(t.category)}" style="--i:${index};--c:${cat.color}"`;
+
+  if (featured) {
+    return `<a class="card feature" ${attrs}>
+      <div class="card-main">${head}${title}${desc}${foot}</div>
+      <div class="card-viz">${viz}</div>
+    </a>`;
+  }
+  return `<a class="card" ${attrs}>${head}${title}${desc}<div class="viz">${viz}</div>${foot}</a>`;
 }
 
 function renderLive(list: SiteTopic[]): string {
@@ -279,8 +297,17 @@ function renderLive(list: SiteTopic[]): string {
           ${bar(consensus, C.yes, C.no, 12)}
         </div>`;
 
+  // Feature the busiest question as the lead story once the feed is deep enough.
+  let featured: SiteTopic | null = null;
+  let rest = list;
+  if (list.length >= 3) {
+    featured = [...list].sort((a, b) => participation(b) - participation(a))[0];
+    rest = list.filter((t) => t.id !== featured!.id);
+  }
+
   const cards = list.length
-    ? list.map(renderCard).join("")
+    ? (featured ? renderCard(featured, 0, true) : "") +
+      rest.map((t, i) => renderCard(t, i + 1)).join("")
     : `<p class="novotes">No questions yet.</p>`;
 
   const cats = Array.from(new Set(list.map((t) => t.category)));
@@ -300,10 +327,13 @@ interface ShellOptions {
   description: string;
   path: string; // also the URL the live refresh re-fetches
   hero: string;
+  heroClass?: string;
   body: string;
 }
 
 function shell(o: ShellOptions): string {
+  const resultsOn = o.path === "/" || o.path.startsWith("/topic");
+  const insightsOn = o.path === "/insights";
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -311,68 +341,101 @@ function shell(o: ShellOptions): string {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${esc(o.title)}</title>
 <meta name="description" content="${esc(o.description)}">
-<meta name="theme-color" content="#000000">
+<meta name="theme-color" content="#070a14">
 <meta property="og:title" content="${esc(o.title)}">
 <meta property="og:description" content="${esc(o.description)}">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://askopinion.app${esc(o.path)}">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='48' fill='%23000'/%3E%3Cpath d='M50 8 A42 42 0 0 1 50 92 A21 21 0 0 1 50 50 A21 21 0 0 0 50 8 Z' fill='%2300ba7c'/%3E%3Cpath d='M50 8 A42 42 0 0 0 50 92 A21 21 0 0 0 50 50 A21 21 0 0 1 50 8 Z' fill='%23f4212e'/%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='48' fill='%23070a14'/%3E%3Cpath d='M50 8 A42 42 0 0 1 50 92 A21 21 0 0 1 50 50 A21 21 0 0 0 50 8 Z' fill='%2300d68f'/%3E%3Cpath d='M50 8 A42 42 0 0 0 50 92 A21 21 0 0 0 50 50 A21 21 0 0 1 50 8 Z' fill='%23ff4d5e'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
   *, *::before, *::after { box-sizing: border-box; }
   :root {
-    --bg: ${C.bg}; --card: ${C.card}; --border: ${C.border}; --muted: ${C.muted};
-    --fg: ${C.fg}; --dim: ${C.dim}; --primary: ${C.primary};
+    --bg: ${C.bg}; --bg2: ${C.bg2}; --card: ${C.card}; --cardHi: ${C.cardHi};
+    --border: ${C.border}; --muted: ${C.muted}; --fg: ${C.fg}; --dim: ${C.dim};
+    --primary: ${C.primary}; --accent: ${C.accent}; --accent2: ${C.accent2};
     --yes: ${C.yes}; --no: ${C.no}; --star: ${C.star};
   }
   body {
     margin: 0; background: var(--bg); color: var(--fg);
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     line-height: 1.5; -webkit-font-smoothing: antialiased;
   }
+  /* Ambient gradient depth, Orchid-style — fixed so it never scrolls. */
+  body::before {
+    content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+    background:
+      radial-gradient(58% 44% at 12% -6%, rgba(129,140,248,.12), transparent 60%),
+      radial-gradient(50% 40% at 96% -2%, rgba(34,211,238,.10), transparent 58%),
+      linear-gradient(180deg, var(--bg2), var(--bg) 40%);
+  }
+  h1, h2, h3, .big, .stat-n, .callout-value, .brand, .pick-winner {
+    font-family: "Space Grotesk", "Inter", sans-serif;
+  }
   .wrap { max-width: 1120px; margin: 0 auto; padding: 0 20px; }
+  a { color: inherit; }
 
   /* header */
   .top {
     position: sticky; top: 0; z-index: 10;
-    background: rgba(0,0,0,.72); backdrop-filter: blur(12px);
+    background: rgba(7,10,20,.72); backdrop-filter: blur(12px);
     border-bottom: 1px solid var(--border);
   }
-  .top .wrap { display: flex; align-items: center; gap: 12px; height: 60px; }
-  .brand { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 19px; letter-spacing: -.4px; }
+  .top .wrap { display: flex; align-items: center; gap: 12px; height: 62px; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 19px; letter-spacing: -.4px; text-decoration: none; }
   .top nav { margin-left: auto; display: flex; align-items: center; gap: 18px; }
   .top nav a { color: var(--dim); text-decoration: none; font-size: 14px; }
   .top nav a:hover { color: var(--fg); }
-  .live-dot { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 700; color: var(--yes); letter-spacing: .4px; }
-  .live-dot i { width: 7px; height: 7px; border-radius: 50%; background: var(--yes); animation: pulse 2.4s ease-in-out infinite; }
-  @keyframes pulse { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: .35; transform: scale(.8); } }
+  .top nav a.on { color: var(--fg); font-weight: 600; }
+  .nav-cta {
+    background: color-mix(in srgb, var(--accent) 16%, transparent);
+    color: var(--accent) !important; border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
+    border-radius: 100px; padding: 7px 14px; font-weight: 600;
+  }
+  .nav-cta:hover { background: color-mix(in srgb, var(--accent) 26%, transparent); }
+  .live-dot { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 700; color: var(--accent); letter-spacing: .4px; }
+  .live-dot i { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 8px var(--accent); animation: pulse 2.4s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: .3; transform: scale(.75); } }
 
   /* hero */
-  .hero { padding: 68px 0 16px; text-align: center; position: relative; overflow: hidden; }
-  .hero::before {
-    content: ""; position: absolute; inset: -40% 0 auto; height: 420px; pointer-events: none;
-    background: radial-gradient(ellipse at 50% 50%, rgba(29,155,240,.16), transparent 62%);
+  .hero { padding: 76px 0 20px; text-align: center; position: relative; }
+  .hero h1 { font-size: clamp(36px, 6.4vw, 64px); line-height: 1.03; letter-spacing: -2px; margin: 18px 0 0; font-weight: 700; }
+  .hero h1 .grad { background: linear-gradient(96deg, var(--accent), var(--accent2) 60%, var(--primary)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .hero p { color: var(--dim); font-size: 17px; max-width: 540px; margin: 18px auto 0; }
+  .eyebrow {
+    display: inline-flex; align-items: center; gap: 8px;
+    color: var(--accent); font-weight: 600; font-size: 13px; letter-spacing: .3px;
+    background: color-mix(in srgb, var(--accent) 12%, transparent);
+    border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+    border-radius: 100px; padding: 6px 14px;
   }
-  .hero > * { position: relative; }
-  .hero h1 { font-size: clamp(34px, 6vw, 58px); line-height: 1.05; letter-spacing: -1.8px; margin: 20px 0 0; font-weight: 800; }
-  .hero h1 .grad { background: linear-gradient(94deg, var(--yes), var(--primary) 55%, var(--no)); -webkit-background-clip: text; background-clip: text; color: transparent; }
-  .hero p { color: var(--dim); font-size: 17px; max-width: 520px; margin: 16px auto 0; }
-  .badge {
-    display: inline-flex; align-items: center; gap: 8px; margin-top: 26px;
-    background: var(--card); border: 1px solid var(--border); border-radius: 100px;
-    padding: 9px 18px; color: var(--primary); font-weight: 600; font-size: 14px;
+  .cta-row { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-top: 30px; }
+  .cta {
+    text-decoration: none; font-weight: 600; font-size: 15px; padding: 13px 24px;
+    border-radius: 100px; transition: transform .15s, box-shadow .2s, border-color .2s;
+    display: inline-flex; align-items: center; gap: 8px;
   }
+  .cta-primary {
+    background: linear-gradient(96deg, var(--accent), var(--primary));
+    color: #04121a; box-shadow: 0 10px 34px -10px color-mix(in srgb, var(--accent) 65%, transparent);
+  }
+  .cta-primary:hover { transform: translateY(-2px); }
+  .cta-ghost { color: var(--fg); border: 1px solid var(--border); }
+  .cta-ghost:hover { border-color: var(--dim); }
 
   /* stats */
-  .stats { display: flex; flex-wrap: wrap; gap: 12px; margin: 34px 0 16px; }
+  .stats { display: flex; flex-wrap: wrap; gap: 12px; margin: 36px 0 16px; }
   .stat {
-    flex: 1 1 160px; background: var(--card); border: 1px solid var(--border);
-    border-radius: 16px; padding: 18px 20px;
+    flex: 1 1 160px; background: linear-gradient(180deg, var(--cardHi), var(--card));
+    border: 1px solid var(--border); border-radius: 16px; padding: 18px 20px;
   }
-  .stat-n { display: block; font-size: 30px; font-weight: 800; letter-spacing: -1px; font-variant-numeric: tabular-nums; }
+  .stat-n { display: block; font-size: 32px; font-weight: 700; letter-spacing: -1px; font-variant-numeric: tabular-nums; }
   .stat-l { display: block; color: var(--dim); font-size: 13px; margin-top: 2px; }
 
   /* consensus meter */
-  .consensus { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 18px 20px; margin-bottom: 32px; }
+  .consensus { background: linear-gradient(180deg, var(--cardHi), var(--card)); border: 1px solid var(--border); border-radius: 16px; padding: 18px 20px; margin-bottom: 32px; }
   .consensus-head { display: flex; flex-wrap: wrap; gap: 8px; justify-content: space-between; align-items: baseline; margin-bottom: 12px; }
   .consensus-head span { color: var(--dim); font-size: 14px; }
   .consensus-head strong { font-size: 17px; font-variant-numeric: tabular-nums; }
@@ -385,27 +448,60 @@ function shell(o: ShellOptions): string {
     border: 1px solid var(--border); border-radius: 100px; padding: 7px 14px;
   }
   .chip:hover { color: var(--fg); border-color: var(--dim); }
-  .chip.on { background: var(--c, var(--primary)); border-color: var(--c, var(--primary)); color: #fff; }
+  .chip.on { background: var(--c, var(--accent)); border-color: var(--c, var(--accent)); color: #04121a; }
 
-  /* cards */
+  /* cards / news blocks */
   .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; align-items: start; }
   .card {
-    background: var(--card); border: 1px solid var(--border); border-radius: 18px;
-    padding: 20px; transition: border-color .2s, transform .2s;
+    position: relative; display: flex; flex-direction: column; overflow: hidden;
+    background: linear-gradient(180deg, var(--cardHi), var(--card));
+    border: 1px solid var(--border); border-radius: 18px; padding: 22px;
+    text-decoration: none; color: inherit;
+    transition: border-color .2s, transform .2s, box-shadow .2s;
   }
-  .card:hover { border-color: #3d4247; transform: translateY(-2px); }
+  .card::before {
+    content: ""; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+    background: linear-gradient(90deg, transparent, var(--c, var(--accent)), transparent);
+    opacity: 0; transition: opacity .2s;
+  }
+  .card:hover {
+    transform: translateY(-3px);
+    border-color: color-mix(in srgb, var(--c, var(--accent)) 55%, var(--border));
+    box-shadow: 0 16px 44px -22px rgba(0,0,0,.9);
+  }
+  .card:hover::before { opacity: .75; }
   .card-top { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
   .cat {
     display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 700;
-    color: var(--c); background: color-mix(in srgb, var(--c) 15%, transparent);
+    color: var(--c); background: color-mix(in srgb, var(--c) 16%, transparent);
     border-radius: 100px; padding: 4px 10px;
   }
   .cat i { width: 6px; height: 6px; border-radius: 50%; background: var(--c); }
   .type { font-size: 11.5px; color: var(--dim); background: var(--muted); border-radius: 100px; padding: 4px 10px; }
   .num { margin-left: auto; font-size: 11.5px; color: var(--dim); font-weight: 700; }
-  .card h3 { margin: 0 0 6px; font-size: 18px; font-weight: 800; letter-spacing: -.4px; line-height: 1.28; }
-  .desc { margin: 0 0 16px; color: var(--dim); font-size: 13.5px; }
-  .viz { margin-top: 14px; }
+  .feat { margin-left: auto; font-size: 11px; font-weight: 700; letter-spacing: .3px; color: var(--accent); }
+  .card h3 { margin: 0 0 6px; font-size: 19px; font-weight: 600; letter-spacing: -.5px; line-height: 1.24; }
+  .desc { margin: 0 0 4px; color: var(--dim); font-size: 13.5px; }
+  .viz { margin-top: 16px; }
+  .card-foot {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--border);
+    font-size: 12px; color: var(--dim);
+  }
+  .foot-meta { font-variant-numeric: tabular-nums; }
+  .readmore { color: var(--accent); font-weight: 600; white-space: nowrap; }
+  .readmore b { transition: margin-left .2s; }
+  .card:hover .readmore b { margin-left: 4px; }
+
+  /* featured lead story */
+  .feature { grid-column: 1 / -1; }
+  .feature h3 { font-size: clamp(22px, 3vw, 30px); }
+  @media (min-width: 720px) {
+    .feature { flex-direction: row; align-items: center; gap: 30px; padding: 30px; }
+    .feature .card-main { flex: 1.05; }
+    .feature .card-viz { flex: .95; min-width: 0; }
+    .feature .card-foot { margin-top: 20px; }
+  }
 
   /* bars */
   .track { background: var(--track); border-radius: 100px; height: var(--h); overflow: hidden; }
@@ -415,7 +511,7 @@ function shell(o: ShellOptions): string {
 
   /* verdict */
   .verdict { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; }
-  .big { font-size: 46px; font-weight: 800; letter-spacing: -2.5px; color: var(--c); line-height: 1; font-variant-numeric: tabular-nums; }
+  .big { font-size: 48px; font-weight: 700; letter-spacing: -2.5px; color: var(--c); line-height: 1; font-variant-numeric: tabular-nums; }
   .big span { font-size: 24px; letter-spacing: -1px; }
   .verdict-label { font-size: 14px; line-height: 1.35; }
   .dim { color: var(--dim); font-size: 12.5px; }
@@ -431,7 +527,7 @@ function shell(o: ShellOptions): string {
     flex: none; width: 22px; height: 22px; border-radius: 7px; background: var(--muted);
     color: var(--dim); font-size: 11.5px; font-weight: 800; display: grid; place-items: center;
   }
-  .rank-top { background: color-mix(in srgb, var(--primary) 22%, transparent); color: var(--primary); }
+  .rank-top { background: color-mix(in srgb, var(--accent) 22%, transparent); color: var(--accent); }
   .rank-body { flex: 1; min-width: 0; }
   .rank-label { display: block; font-size: 13.5px; margin-bottom: 5px; }
   .rank-avg { flex: none; font-size: 12px; color: var(--dim); font-variant-numeric: tabular-nums; }
@@ -443,47 +539,59 @@ function shell(o: ShellOptions): string {
   .aspect-pct { font-size: 12px; text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
   .aspect-none { color: var(--dim); font-size: 12px; }
 
-  /* extras */
-  .tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; }
-  .tags span { font-size: 11.5px; color: var(--primary); }
-  .demo { margin-top: 14px; border-top: 1px solid var(--border); padding-top: 12px; }
-  .demo summary { cursor: pointer; font-size: 12.5px; color: var(--dim); font-weight: 600; }
-  .demo summary::marker { color: var(--dim); }
-  .demo-field { margin-top: 12px; }
-  .demo-name { font-size: 11px; text-transform: uppercase; letter-spacing: .6px; color: var(--dim); font-weight: 700; }
-  .demo-bars { display: grid; gap: 6px; margin-top: 7px; }
-  .demo-row { display: grid; grid-template-columns: 74px 1fr 34px; align-items: center; gap: 9px; }
-  .demo-bucket { font-size: 12px; color: var(--fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .demo-n { font-size: 11.5px; color: var(--dim); text-align: right; font-variant-numeric: tabular-nums; }
-  .quote {
-    margin: 14px 0 0; padding: 11px 14px; background: var(--muted); border-radius: 12px;
-    font-size: 13px; color: var(--fg);
+  /* tags */
+  .tags { display: flex; flex-wrap: wrap; gap: 6px; margin: 20px 0 0; }
+  .tags span { font-size: 12px; color: var(--accent); }
+
+  /* ---- topic analysis page ---- */
+  .hero-topic { text-align: left; padding: 34px 0 6px; }
+  .back { display: inline-block; color: var(--dim); text-decoration: none; font-size: 13.5px; margin-bottom: 18px; }
+  .back:hover { color: var(--fg); }
+  .cat-lg { font-size: 12.5px; padding: 5px 12px; }
+  .topic-h1 { font-size: clamp(28px, 5vw, 46px); line-height: 1.08; letter-spacing: -1.4px; margin: 16px 0 0; font-weight: 700; }
+  .topic-desc { color: var(--dim); font-size: 16px; max-width: 640px; margin: 14px 0 0; }
+  .topic-meta { display: flex; flex-wrap: wrap; gap: 8px 18px; margin-top: 18px; color: var(--dim); font-size: 13px; font-variant-numeric: tabular-nums; }
+  .topic-meta span { position: relative; }
+  .analysis { margin-top: 34px; }
+  .sec-h { font-size: 14px; text-transform: uppercase; letter-spacing: .8px; color: var(--dim); font-weight: 700; margin: 0 0 14px; }
+  .panel { background: linear-gradient(180deg, var(--cardHi), var(--card)); border: 1px solid var(--border); border-radius: 18px; padding: 24px; }
+  .viz-lg .big { font-size: 60px; }
+  .viz-lg .verdict { gap: 18px; }
+
+  /* comments */
+  .comments { display: grid; gap: 12px; }
+  .comment { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 14px 16px; }
+  .comment-head { display: flex; justify-content: space-between; gap: 10px; margin-bottom: 6px; }
+  .comment-author { font-size: 13px; font-weight: 600; }
+  .comment-date { font-size: 11.5px; color: var(--dim); font-variant-numeric: tabular-nums; }
+  .comment-text { margin: 0; font-size: 14px; color: var(--fg); }
+
+  .detail-cta {
+    display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px;
+    margin-top: 40px; padding: 24px 26px; border-radius: 18px;
+    background: linear-gradient(96deg, color-mix(in srgb, var(--accent) 12%, var(--card)), var(--card));
+    border: 1px solid color-mix(in srgb, var(--accent) 26%, var(--border));
   }
-  .quote cite { display: block; margin-top: 6px; font-size: 11.5px; color: var(--dim); font-style: normal; }
-  .card-foot {
-    display: flex; flex-wrap: wrap; gap: 12px; margin-top: 16px; padding-top: 12px;
-    border-top: 1px solid var(--border); font-size: 11.5px; color: var(--dim);
-  }
-  .card-foot span:last-child { margin-left: auto; }
+  .detail-cta strong { display: block; font-size: 17px; }
+  .detail-cta span { color: var(--dim); font-size: 13.5px; }
 
   /* insights */
-  .top nav a.on { color: var(--fg); font-weight: 700; }
   .ins { margin-top: 44px; }
-  .ins h2 { font-size: 22px; font-weight: 800; letter-spacing: -.6px; margin: 0 0 4px; }
+  .ins h2 { font-size: 22px; font-weight: 700; letter-spacing: -.6px; margin: 0 0 4px; }
   .lede { color: var(--dim); font-size: 14px; margin: 0 0 18px; max-width: 620px; }
 
   .callouts { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
   .callout {
-    background: var(--card); border: 1px solid var(--border); border-radius: 16px;
-    padding: 18px 20px; display: flex; flex-direction: column; gap: 2px;
+    background: linear-gradient(180deg, var(--cardHi), var(--card)); border: 1px solid var(--border);
+    border-radius: 16px; padding: 18px 20px; display: flex; flex-direction: column; gap: 2px;
   }
   .callout-label { font-size: 11px; text-transform: uppercase; letter-spacing: .7px; color: var(--dim); font-weight: 700; }
-  .callout-value { font-size: 30px; font-weight: 800; letter-spacing: -1.2px; font-variant-numeric: tabular-nums; margin: 4px 0 2px; }
+  .callout-value { font-size: 30px; font-weight: 700; letter-spacing: -1.2px; font-variant-numeric: tabular-nums; margin: 4px 0 2px; }
   .callout-title { font-size: 14.5px; font-weight: 600; line-height: 1.35; }
   .callout-sub { font-size: 12.5px; color: var(--dim); margin-top: 3px; }
 
   .spectrum, .catrows, .board, .picks {
-    background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 8px 18px;
+    background: linear-gradient(180deg, var(--cardHi), var(--card)); border: 1px solid var(--border); border-radius: 16px; padding: 8px 18px;
   }
   .spec-row, .catrow, .board-row {
     display: grid; align-items: center; gap: 14px;
@@ -515,12 +623,15 @@ function shell(o: ShellOptions): string {
   .demogrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
   .demobox { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 16px 18px; }
   .demobox h3 { margin: 0 0 12px; font-size: 12px; text-transform: uppercase; letter-spacing: .7px; color: var(--dim); }
+  .demo-row { display: grid; grid-template-columns: 74px 1fr 34px; align-items: center; gap: 9px; margin-top: 6px; }
+  .demo-bucket { font-size: 12px; color: var(--fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .demo-n { font-size: 11.5px; color: var(--dim); text-align: right; font-variant-numeric: tabular-nums; }
 
   .picks { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 0; padding: 0; }
   .pick { padding: 18px 20px; border-right: 1px solid var(--border); display: flex; flex-direction: column; gap: 3px; }
   .pick:last-child { border-right: none; }
   .pick-q { font-size: 12.5px; color: var(--dim); }
-  .pick-winner { font-size: 19px; font-weight: 800; letter-spacing: -.5px; color: var(--primary); }
+  .pick-winner { font-size: 19px; font-weight: 700; letter-spacing: -.5px; color: var(--accent); }
   .pick-sub { font-size: 12px; color: var(--dim); }
 
   /* footer */
@@ -534,17 +645,15 @@ function shell(o: ShellOptions): string {
      script fails the page must still be readable. */
   @keyframes rise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
   @keyframes grow { from { width: 0; } }
-  .card, .stat, .consensus {
+  .card, .stat, .consensus, .panel, .callout {
     animation: rise .5s cubic-bezier(.22,.8,.3,1) both;
     animation-delay: calc(var(--i, 0) * 55ms);
   }
   .fill, .stars-fg { animation: grow .9s cubic-bezier(.22,.8,.3,1) .15s both; }
   @media (prefers-reduced-motion: reduce) {
-    .card, .stat, .consensus, .fill, .stars-fg { animation: none; }
+    .card, .stat, .consensus, .panel, .callout, .fill, .stars-fg { animation: none; }
     .live-dot i { animation: none; }
   }
-  /* Narrow screens: let the label and bar each take a full row, then sit the
-     numbers side by side underneath. */
   @media (max-width: 720px) {
     .spec-row, .board-row { grid-template-columns: minmax(0, 1fr) auto; row-gap: 7px; column-gap: 10px; }
     .spec-title, .board-title, .spec-bar, .board-bar { grid-column: 1 / -1; }
@@ -561,10 +670,11 @@ function shell(o: ShellOptions): string {
     .pick:last-child { border-bottom: none; }
   }
   @media (max-width: 600px) {
-    .hero { padding: 48px 0 28px; }
-    .top nav { gap: 14px; }
+    .hero { padding: 52px 0 28px; }
+    .top nav { gap: 12px; }
     .top nav a.hide-sm { display: none; }
     .grid { grid-template-columns: 1fr; }
+    .detail-cta { flex-direction: column; align-items: flex-start; }
   }
 </style>
 </head>
@@ -572,27 +682,27 @@ function shell(o: ShellOptions): string {
 
 <header class="top">
   <div class="wrap">
-    <span class="brand">
+    <a class="brand" href="/">
       <svg width="26" height="26" viewBox="0 0 100 100" aria-hidden="true">
-        <circle cx="50" cy="50" r="46" fill="#16181c" stroke="#2f3336"/>
+        <circle cx="50" cy="50" r="46" fill="#0f1524" stroke="#1e2740"/>
         <path d="M50 8 A42 42 0 0 1 50 92 A21 21 0 0 1 50 50 A21 21 0 0 0 50 8 Z" fill="${C.yes}"/>
         <path d="M50 8 A42 42 0 0 0 50 92 A21 21 0 0 0 50 50 A21 21 0 0 1 50 8 Z" fill="${C.no}"/>
-        <circle cx="50" cy="29" r="8" fill="#000"/>
-        <circle cx="50" cy="71" r="8" fill="#000"/>
+        <circle cx="50" cy="29" r="8" fill="#070a14"/>
+        <circle cx="50" cy="71" r="8" fill="#070a14"/>
       </svg>
       Opinion
-    </span>
+    </a>
     <nav>
       <span class="live-dot"><i></i>LIVE</span>
-      <a href="/"${o.path === "/" ? ' class="on"' : ""}>Results</a>
-      <a href="/insights"${o.path === "/insights" ? ' class="on"' : ""}>Insights</a>
-      <a href="/privacy" class="hide-sm">Privacy</a>
+      <a href="/"${resultsOn ? ' class="on"' : ""}>Results</a>
+      <a href="/insights"${insightsOn ? ' class="on"' : ""}>Insights</a>
+      <a href="${PLAY_URL}" class="nav-cta">Get the app</a>
     </nav>
   </div>
 </header>
 
 <main>
-  <section class="hero">
+  <section class="hero ${esc(o.heroClass ?? "")}">
     <div class="wrap">${o.hero}</div>
   </section>
 
@@ -618,10 +728,11 @@ function shell(o: ShellOptions): string {
   function applyFilter() {
     var cards = document.querySelectorAll(".card");
     for (var i = 0; i < cards.length; i++) {
-      var show = filter === "all" || cards[i].getAttribute("data-cat") === filter;
+      // The featured lead story always stays visible.
+      var isFeature = cards[i].classList.contains("feature");
+      var show = isFeature || filter === "all" || cards[i].getAttribute("data-cat") === filter;
       cards[i].style.display = show ? "" : "none";
     }
-    // Chips are re-rendered by the live refresh, so re-mark the active one.
     var chips = document.querySelectorAll(".chip");
     var matched = false;
     for (var j = 0; j < chips.length; j++) {
@@ -629,7 +740,6 @@ function shell(o: ShellOptions): string {
       chips[j].classList.toggle("on", on);
       if (on) matched = true;
     }
-    // The filtered category disappeared from the feed — fall back to All.
     if (!matched && filter !== "all") {
       filter = "all";
       applyFilter();
@@ -640,6 +750,7 @@ function shell(o: ShellOptions): string {
     var el = e.target;
     var chip = el && el.closest ? el.closest(".chip") : null;
     if (!chip) return;
+    e.preventDefault();
     filter = chip.getAttribute("data-cat");
     applyFilter();
   });
@@ -655,7 +766,6 @@ function shell(o: ShellOptions): string {
         var next = doc.getElementById("live");
         var cur = document.getElementById("live");
         if (!next || !cur || next.innerHTML === cur.innerHTML) return;
-        // Replacing the nodes restarts the CSS entrance animations for free.
         cur.innerHTML = next.innerHTML;
         applyFilter();
       })
@@ -673,10 +783,94 @@ export function renderPage(list: SiteTopic[]): string {
     title: "Opinion — what people actually think",
     description: "Live results from the Opinion app: real polls, ratings and rankings, updating as people vote.",
     path: "/",
-    hero: `<h1>What people <span class="grad">actually think</span></h1>
-      <p>Real questions, real votes, counted as they come in. This is the live result feed from the Opinion app.</p>
-      <span class="badge">Coming soon to Google Play</span>`,
+    hero: `<span class="eyebrow"><span class="live-dot"><i></i></span>Live opinion, as it happens</span>
+      <h1>See what the world <span class="grad">actually thinks</span></h1>
+      <p>Real questions. Real votes. Counted live as they come in — straight from the Opinion app. Tap any story to break down the data.</p>
+      <div class="cta-row">
+        <a class="cta cta-primary" href="${PLAY_URL}">Get it on Google Play</a>
+        <a class="cta cta-ghost" href="/insights">Explore the data</a>
+      </div>`,
     body: renderLive(list),
+  });
+}
+
+/* -------------------------------------------------------------- topic page */
+
+function renderComments(comments: SiteComment[]): string {
+  if (comments.length === 0) return `<p class="novotes">No comments yet — the conversation starts in the app.</p>`;
+  return `<div class="comments">${comments
+    .slice(0, 50)
+    .map(
+      (c) => `<div class="comment">
+        <div class="comment-head">
+          <span class="comment-author">${esc(c.authorName ?? "Anonymous")}</span>
+          <span class="comment-date">${formatDate(c.createdAt)}</span>
+        </div>
+        <p class="comment-text">${esc(c.text)}</p>
+      </div>`,
+    )
+    .join("")}</div>`;
+}
+
+export function renderTopicPage(t: SiteTopic, comments: SiteComment[]): string {
+  const cat = CATEGORY_CONFIG[t.category] ?? CATEGORY_CONFIG.other;
+  const viz = vizFor(t);
+  const part = participation(t);
+  const author = t.createdByName ?? "Opinion";
+  const tags = (t.hashtags ?? []).slice(0, 6);
+  const demo = renderDemoPanel(t);
+
+  const body = `
+    <section class="analysis" style="--i:0">
+      <h2 class="sec-h">The verdict</h2>
+      <div class="panel viz-lg">${viz}</div>
+    </section>
+    ${
+      demo
+        ? `<section class="analysis" style="--i:1">
+            <h2 class="sec-h">Who voted</h2>
+            <div class="panel">${demo}</div>
+          </section>`
+        : ""
+    }
+    ${tags.length ? `<div class="tags">${tags.map((h) => `<span>#${esc(h)}</span>`).join("")}</div>` : ""}
+    <section class="analysis" style="--i:2">
+      <h2 class="sec-h">Comments${t.commentCount ? " · " + fmt(t.commentCount) : ""}</h2>
+      ${renderComments(comments)}
+    </section>
+    <div class="detail-cta">
+      <div><strong>Cast your vote</strong><span>Join in and see the results move — in the Opinion app.</span></div>
+      <a class="cta cta-primary" href="${PLAY_URL}">Get it on Google Play</a>
+    </div>`;
+
+  return shell({
+    title: `${t.title} — Opinion`,
+    description: t.description || `Live results for "${t.title}" on Opinion.`,
+    path: `/topic/${t.id}`,
+    heroClass: "hero-topic",
+    hero: `<a class="back" href="/">&larr; All results</a>
+      <div><span class="cat cat-lg" style="--c:${cat.color}"><i></i>${esc(cat.label)}</span></div>
+      <h1 class="topic-h1">${esc(t.title)}</h1>
+      ${t.description ? `<p class="topic-desc">${esc(t.description)}</p>` : ""}
+      <div class="topic-meta">
+        <span>${fmt(part)} ${part === 1 ? "vote" : "votes"}</span>
+        <span>${TYPE_LABEL[t.votingType] ?? t.votingType}</span>
+        <span>${formatDate(t.createdAt)}</span>
+        <span>by ${esc(author)}</span>
+      </div>`,
+    body,
+  });
+}
+
+export function renderNotFound(): string {
+  return shell({
+    title: "Not found — Opinion",
+    description: "That page could not be found.",
+    path: "/",
+    hero: `<h1>Not <span class="grad">found</span></h1>
+      <p>That question doesn't exist, or it was removed.</p>
+      <div class="cta-row"><a class="cta cta-primary" href="/">Back to results</a></div>`,
+    body: "",
   });
 }
 
@@ -738,7 +932,7 @@ function renderExtremes(list: SiteTopic[]): string {
         (agreed.yesPct >= 50 ? agreed.yesPct + "% yes" : 100 - agreed.yesPct + "% no"),
         fmt(agreed.total) + " votes", agreed.yesPct >= 50 ? C.yes : C.no)}
       ${callout("Most answered", busiest.title, fmt(participation(busiest)),
-        (TYPE_LABEL[busiest.votingType] ?? busiest.votingType) + " — the busiest question", C.primary)}
+        (TYPE_LABEL[busiest.votingType] ?? busiest.votingType) + " — the busiest question", C.accent)}
     </div>
   </section>`;
 }
