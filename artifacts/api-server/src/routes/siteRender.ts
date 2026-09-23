@@ -236,6 +236,61 @@ function renderDemoPanel(t: SiteTopic): string {
     .join("")}</div>`;
 }
 
+// Interactive one-tap vote widget for the topic page. Controls carry data-*
+// attributes; the client script (in shell) POSTs the vote and re-renders results
+// from the server. Results (vizFor) are always shown beneath the controls.
+function renderVoteWidget(t: SiteTopic): string {
+  let controls = "";
+  if (t.votingType === "yesno") {
+    controls = `<div class="vote-controls yn-controls">
+      <button class="vbtn vbtn-yes" data-value="yes" type="button">Yes</button>
+      <button class="vbtn vbtn-no" data-value="no" type="button">No</button>
+    </div>`;
+  } else if (t.votingType === "rating") {
+    controls = `<div class="vote-controls rate-controls" aria-label="Rate 1 to 5">
+      ${[1, 2, 3, 4, 5]
+        .map((n) => `<button class="rbtn" data-value="${n}" type="button" aria-label="${n} star">★</button>`)
+        .join("")}
+    </div>`;
+  } else if (t.votingType === "aspects") {
+    const aspects = t.aspects ?? [];
+    controls = `<div class="vote-controls aspect-vcontrols">
+      ${aspects
+        .map(
+          (a) => `<div class="aspect-vrow">
+        <span class="aspect-vlabel">${esc(a)}</span>
+        <span class="aspect-vbtns">
+          <button class="abtn abtn-up" data-aspect="${esc(a)}" data-choice="up" type="button">👍</button>
+          <button class="abtn abtn-down" data-aspect="${esc(a)}" data-choice="down" type="button">👎</button>
+        </span>
+      </div>`,
+        )
+        .join("")}
+    </div>`;
+  } else if (t.votingType === "ranking") {
+    const opts = t.rankingOptions ?? [];
+    controls = `<div class="vote-controls rank-vcontrols">
+      <p class="rank-vhint">Tap the options in your order — best first.</p>
+      <div class="rank-opts">
+        ${opts
+          .map(
+            (o) => `<button class="ropt" data-opt="${esc(o.id)}" type="button"><b class="ropt-num"></b><span>${esc(o.label)}</span></button>`,
+          )
+          .join("")}
+      </div>
+      <div class="rank-actions">
+        <button class="rank-reset" type="button">Reset</button>
+        <button class="rank-send" type="button" disabled>Submit ranking</button>
+      </div>
+    </div>`;
+  }
+  return `<div class="vote-panel panel" data-topic="${esc(t.id)}" data-kind="${esc(t.votingType)}">
+    ${controls}
+    <div class="vote-status" aria-live="polite"></div>
+    <div class="vote-results">${vizFor(t)}</div>
+  </div>`;
+}
+
 function renderCard(t: SiteTopic, index: number, featured = false): string {
   const cat = CATEGORY_CONFIG[t.category] ?? CATEGORY_CONFIG.other;
   const viz = vizFor(t);
@@ -558,6 +613,52 @@ function shell(o: ShellOptions): string {
   .viz-lg .big { font-size: 60px; }
   .viz-lg .verdict { gap: 18px; }
 
+  /* web voting */
+  .vote-panel { position: relative; }
+  .vote-controls { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; }
+  .vbtn {
+    flex: 1 1 130px; font: inherit; font-weight: 700; font-size: 16px; cursor: pointer;
+    padding: 15px 18px; border-radius: 14px; border: 1px solid var(--border);
+    background: var(--muted); color: var(--fg); transition: transform .12s, border-color .2s, color .2s, background .2s;
+  }
+  .vbtn:hover { transform: translateY(-1px); }
+  .vbtn-yes:hover, .vbtn-yes.chosen { border-color: var(--yes); color: var(--yes); background: color-mix(in srgb, var(--yes) 12%, var(--muted)); }
+  .vbtn-no:hover, .vbtn-no.chosen { border-color: var(--no); color: var(--no); background: color-mix(in srgb, var(--no) 12%, var(--muted)); }
+
+  .rate-controls { gap: 4px; }
+  .rbtn {
+    font: inherit; font-size: 36px; line-height: 1; cursor: pointer; background: none; border: none;
+    color: #3a3d42; padding: 2px 4px; transition: color .1s, transform .1s;
+  }
+  .rbtn:hover, .rbtn.hot, .rbtn.chosen { color: var(--star); }
+  .rbtn:hover { transform: scale(1.08); }
+
+  .aspect-vcontrols { flex-direction: column; gap: 8px; }
+  .aspect-vrow { display: flex; align-items: center; justify-content: space-between; gap: 12px; background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 10px 14px; }
+  .aspect-vlabel { font-size: 14px; font-weight: 600; }
+  .aspect-vbtns { display: flex; gap: 8px; }
+  .abtn { font: inherit; font-size: 18px; cursor: pointer; background: var(--muted); border: 1px solid var(--border); border-radius: 10px; padding: 6px 12px; transition: transform .12s, border-color .2s; }
+  .abtn:hover { transform: translateY(-1px); }
+  .abtn-up.chosen { border-color: var(--yes); background: color-mix(in srgb, var(--yes) 16%, var(--muted)); }
+  .abtn-down.chosen { border-color: var(--no); background: color-mix(in srgb, var(--no) 16%, var(--muted)); }
+
+  .rank-vcontrols { flex-direction: column; align-items: stretch; gap: 10px; }
+  .rank-vhint { margin: 0; font-size: 13px; color: var(--dim); }
+  .rank-opts { display: grid; gap: 8px; }
+  .ropt { display: flex; align-items: center; gap: 10px; text-align: left; font: inherit; font-size: 15px; font-weight: 600; cursor: pointer; background: var(--muted); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; color: var(--fg); transition: border-color .2s, background .2s; }
+  .ropt:hover { border-color: var(--dim); }
+  .ropt.picked { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, var(--muted)); }
+  .ropt-num { display: none; flex: none; width: 22px; height: 22px; border-radius: 7px; background: var(--accent); color: #04121a; font-size: 12px; font-weight: 800; align-items: center; justify-content: center; }
+  .ropt.picked .ropt-num { display: inline-flex; }
+  .rank-actions { display: flex; gap: 10px; }
+  .rank-reset, .rank-send { font: inherit; font-weight: 600; font-size: 14px; cursor: pointer; border-radius: 100px; padding: 10px 18px; border: 1px solid var(--border); background: transparent; color: var(--fg); }
+  .rank-send { background: linear-gradient(96deg, var(--accent), var(--primary)); color: #04121a; border: none; }
+  .rank-send:disabled { opacity: .45; cursor: not-allowed; }
+
+  .vote-status { font-size: 13px; color: var(--accent); font-weight: 600; }
+  .vote-status:not(:empty) { margin-bottom: 12px; }
+  .vote-results { margin-top: 6px; }
+
   /* comments */
   .comments { display: grid; gap: 12px; }
   .comment { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 14px 16px; }
@@ -724,11 +825,28 @@ function shell(o: ShellOptions): string {
 <script>
 (function () {
   var filter = "all";
+  var rankSel = [];
+
+  // Anonymous voter id: one vote per device. localStorage, with an in-memory
+  // fallback for private mode where storage throws.
+  function anonId() {
+    try {
+      var k = "opinion_anon_id";
+      var v = localStorage.getItem(k);
+      if (!v) {
+        v = (Date.now().toString(36) + Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2)).slice(0, 32);
+        localStorage.setItem(k, v);
+      }
+      return v;
+    } catch (e) {
+      if (!window.__anon) window.__anon = (Date.now().toString(36) + Math.random().toString(36).slice(2) + "x").slice(0, 32);
+      return window.__anon;
+    }
+  }
 
   function applyFilter() {
     var cards = document.querySelectorAll(".card");
     for (var i = 0; i < cards.length; i++) {
-      // The featured lead story always stays visible.
       var isFeature = cards[i].classList.contains("feature");
       var show = isFeature || filter === "all" || cards[i].getAttribute("data-cat") === filter;
       cards[i].style.display = show ? "" : "none";
@@ -740,36 +858,141 @@ function shell(o: ShellOptions): string {
       chips[j].classList.toggle("on", on);
       if (on) matched = true;
     }
-    if (!matched && filter !== "all") {
-      filter = "all";
-      applyFilter();
-    }
+    if (!matched && filter !== "all") { filter = "all"; applyFilter(); }
   }
 
-  document.addEventListener("click", function (e) {
-    var el = e.target;
-    var chip = el && el.closest ? el.closest(".chip") : null;
-    if (!chip) return;
-    e.preventDefault();
-    filter = chip.getAttribute("data-cat");
-    applyFilter();
-  });
+  function setStatus(msg) {
+    var s = document.querySelector(".vote-status");
+    if (s) s.textContent = msg || "";
+  }
 
-  // Keep the numbers honest without a full reload: re-render the live section
-  // from the server, but only when something actually changed.
-  setInterval(function () {
-    if (document.hidden) return;
+  function markMyVotes() {
+    var panel = document.querySelector(".vote-panel");
+    if (!panel) return;
+    var topicId = panel.getAttribute("data-topic");
+    fetch("/api/topics/me/votes", { headers: { "x-anon-id": anonId() } })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        var v = data && data.votes && data.votes[topicId];
+        if (!v) return;
+        if (v.yesno) {
+          var b = panel.querySelector('.vbtn[data-value="' + v.yesno + '"]');
+          if (b) b.classList.add("chosen");
+        }
+        if (v.rating) {
+          var stars = panel.querySelectorAll(".rbtn");
+          for (var i = 0; i < stars.length; i++) stars[i].classList.toggle("chosen", (i + 1) <= v.rating);
+        }
+        if (v.aspectChoices) {
+          for (var asp in v.aspectChoices) {
+            var el = panel.querySelector('.abtn[data-aspect="' + asp.replace(/"/g, '\\\\"') + '"][data-choice="' + v.aspectChoices[asp] + '"]');
+            if (el) el.classList.add("chosen");
+          }
+        }
+      })
+      .catch(function () {});
+  }
+
+  function updateRankUI() {
+    var wrap = document.querySelector(".rank-vcontrols");
+    if (!wrap) return;
+    var opts = wrap.querySelectorAll(".ropt");
+    for (var i = 0; i < opts.length; i++) {
+      var id = opts[i].getAttribute("data-opt");
+      var pos = rankSel.indexOf(id);
+      opts[i].classList.toggle("picked", pos > -1);
+      var num = opts[i].querySelector(".ropt-num");
+      if (num) num.textContent = pos > -1 ? String(pos + 1) : "";
+    }
+    var send = wrap.querySelector(".rank-send");
+    if (send) send.disabled = opts.length === 0 || rankSel.length !== opts.length;
+  }
+
+  function refreshLive(cb) {
     fetch(document.body.getAttribute("data-refresh") || "/", { headers: { accept: "text/html" } })
       .then(function (r) { return r.text(); })
       .then(function (html) {
         var doc = new DOMParser().parseFromString(html, "text/html");
         var next = doc.getElementById("live");
         var cur = document.getElementById("live");
-        if (!next || !cur || next.innerHTML === cur.innerHTML) return;
-        cur.innerHTML = next.innerHTML;
+        if (next && cur && next.innerHTML !== cur.innerHTML) cur.innerHTML = next.innerHTML;
         applyFilter();
+        markMyVotes();
+        updateRankUI();
+        if (cb) cb();
       })
-      .catch(function () {});
+      .catch(function () { if (cb) cb(); });
+  }
+
+  function castVote(topicId, body) {
+    setStatus("Saving your vote…");
+    fetch("/api/topics/" + topicId + "/vote", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-anon-id": anonId() },
+      body: JSON.stringify(body)
+    })
+      .then(function (r) { if (!r.ok) throw new Error("vote failed"); return r.json(); })
+      .then(function () { rankSel = []; refreshLive(function () { setStatus("✓ Your vote is in — thanks!"); }); })
+      .catch(function () { setStatus("Couldn't save your vote. Please try again."); });
+  }
+
+  document.addEventListener("click", function (e) {
+    var t = e.target;
+    function closest(sel) { return t && t.closest ? t.closest(sel) : null; }
+
+    var chip = closest(".chip");
+    if (chip) { e.preventDefault(); filter = chip.getAttribute("data-cat"); applyFilter(); return; }
+
+    var panel = closest(".vote-panel");
+    if (!panel) return;
+    var topicId = panel.getAttribute("data-topic");
+
+    var vbtn = closest(".vbtn");
+    if (vbtn) { e.preventDefault(); castVote(topicId, { kind: "yesno", value: vbtn.getAttribute("data-value") }); return; }
+
+    var rbtn = closest(".rbtn");
+    if (rbtn) { e.preventDefault(); castVote(topicId, { kind: "rating", value: Number(rbtn.getAttribute("data-value")) }); return; }
+
+    var abtn = closest(".abtn");
+    if (abtn) { e.preventDefault(); castVote(topicId, { kind: "aspect", aspect: abtn.getAttribute("data-aspect"), choice: abtn.getAttribute("data-choice") }); return; }
+
+    var reset = closest(".rank-reset");
+    if (reset) { e.preventDefault(); rankSel = []; updateRankUI(); return; }
+
+    var send = closest(".rank-send");
+    if (send) { e.preventDefault(); if (rankSel.length) castVote(topicId, { kind: "ranking", value: rankSel }); return; }
+
+    var ropt = closest(".ropt");
+    if (ropt) {
+      e.preventDefault();
+      var id = ropt.getAttribute("data-opt");
+      var idx = rankSel.indexOf(id);
+      if (idx > -1) rankSel.splice(idx, 1); else rankSel.push(id);
+      updateRankUI();
+      return;
+    }
+  });
+
+  // Star hover preview.
+  document.addEventListener("mouseover", function (e) {
+    var rbtn = e.target && e.target.closest ? e.target.closest(".rbtn") : null;
+    if (!rbtn || !rbtn.parentNode) return;
+    var val = Number(rbtn.getAttribute("data-value"));
+    var stars = rbtn.parentNode.querySelectorAll(".rbtn");
+    for (var i = 0; i < stars.length; i++) stars[i].classList.toggle("hot", (i + 1) <= val);
+  });
+  document.addEventListener("mouseout", function (e) {
+    var rc = e.target && e.target.closest ? e.target.closest(".rate-controls") : null;
+    if (!rc) return;
+    var stars = rc.querySelectorAll(".rbtn");
+    for (var i = 0; i < stars.length; i++) stars[i].classList.remove("hot");
+  });
+
+  markMyVotes();
+
+  setInterval(function () {
+    if (document.hidden) return;
+    refreshLive();
   }, 45000);
 })();
 </script>
@@ -814,7 +1037,6 @@ function renderComments(comments: SiteComment[]): string {
 
 export function renderTopicPage(t: SiteTopic, comments: SiteComment[]): string {
   const cat = CATEGORY_CONFIG[t.category] ?? CATEGORY_CONFIG.other;
-  const viz = vizFor(t);
   const part = participation(t);
   const author = t.createdByName ?? "Opinion";
   const tags = (t.hashtags ?? []).slice(0, 6);
@@ -822,8 +1044,8 @@ export function renderTopicPage(t: SiteTopic, comments: SiteComment[]): string {
 
   const body = `
     <section class="analysis" style="--i:0">
-      <h2 class="sec-h">The verdict</h2>
-      <div class="panel viz-lg">${viz}</div>
+      <h2 class="sec-h">Cast your vote</h2>
+      ${renderVoteWidget(t)}
     </section>
     ${
       demo
