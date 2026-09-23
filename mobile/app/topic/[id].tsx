@@ -154,7 +154,9 @@ export default function TopicDetailScreen() {
   return (
     <KeyboardAvoidingView
       style={s.container}
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      // On Android "height" leaves a blank gap the size of the keyboard after it
+      // closes; native adjustResize (Expo edge-to-edge default) handles it cleanly.
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
       keyboardVerticalOffset={0}
     >
       {/* Header */}
