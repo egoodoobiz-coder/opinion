@@ -25,6 +25,9 @@ const PLAY_URL = "https://play.google.com/store/apps/details?id=app.askopinion";
 // only works on askopinion.app (production keys refuse other origins).
 const CLERK_PK = "pk_live_Y2xlcmsuYXNrb3Bpbmlvbi5hcHAk";
 const CLERK_JS = "https://clerk.askopinion.app/npm/@clerk/clerk-js@latest/dist/clerk.browser.js";
+// Clerk's hosted Account Portal sign-in — robust across browsers, unlike the
+// embedded modal. We redirect here and come back to the same page after sign-in.
+const ACCOUNTS_SIGNIN = "https://accounts.askopinion.app/sign-in";
 
 const CATEGORY_CONFIG: Record<string, { label: string; color: string }> = {
   food: { label: "Food", color: "#f97316" },
@@ -861,7 +864,15 @@ function shell(o: ShellOptions): string {
       return h;
     });
   }
-  function promptSignIn() { if (window.Clerk && window.Clerk.openSignIn) window.Clerk.openSignIn({}); }
+  function savePending(topicId, body) { try { localStorage.setItem("opinion_pending_vote", JSON.stringify({ topicId: topicId, body: body })); } catch (e) {} }
+  function loadPending() { try { var s = localStorage.getItem("opinion_pending_vote"); return s ? JSON.parse(s) : null; } catch (e) { return null; } }
+  function clearPending() { try { localStorage.removeItem("opinion_pending_vote"); } catch (e) {} }
+  // Redirect to Clerk's hosted sign-in page (robust, unlike the embedded modal),
+  // remembering the current page so we return and can replay a queued vote.
+  function goSignIn(topicId, body) {
+    if (topicId && body) savePending(topicId, body);
+    window.location.href = "${ACCOUNTS_SIGNIN}?redirect_url=" + encodeURIComponent(window.location.href);
+  }
   function updateVoteHint() {
     if (!document.querySelector(".vote-panel")) return;
     if (!signedIn()) setStatus("Sign in to cast your vote — it takes 10 seconds.");
@@ -963,9 +974,8 @@ function shell(o: ShellOptions): string {
 
   function castVote(topicId, body) {
     if (!signedIn()) {
-      pendingVote = { topicId: topicId, body: body };
-      setStatus("Sign in to lock in your vote…");
-      promptSignIn();
+      setStatus("Taking you to sign in…");
+      goSignIn(topicId, body);
       return;
     }
     doVote(topicId, body);
@@ -983,7 +993,7 @@ function shell(o: ShellOptions): string {
       })
       .then(function () { rankSel = []; refreshLive(function () { setStatus("✓ Your vote is in — thanks!"); }); })
       .catch(function (err) {
-        if (err && err.message === "unauth") { setStatus("Please sign in to vote."); promptSignIn(); }
+        if (err && err.message === "unauth") { setStatus("Please sign in to vote."); goSignIn(topicId, body); }
         else setStatus("Couldn't save your vote. Please try again.");
       });
   }
@@ -992,7 +1002,7 @@ function shell(o: ShellOptions): string {
     var t = e.target;
     function closest(sel) { return t && t.closest ? t.closest(sel) : null; }
 
-    if (closest(".signin-btn")) { e.preventDefault(); promptSignIn(); return; }
+    if (closest(".signin-btn")) { e.preventDefault(); goSignIn(); return; }
     if (closest(".signout")) { e.preventDefault(); if (window.Clerk) window.Clerk.signOut(); return; }
 
     var chip = closest(".chip");
@@ -1049,11 +1059,12 @@ function shell(o: ShellOptions): string {
     window.Clerk.load().then(function () {
       renderAuth();
       markMyVotes();
-      window.Clerk.addListener(function () {
-        renderAuth();
-        if (signedIn() && pendingVote) { var pv = pendingVote; pendingVote = null; doVote(pv.topicId, pv.body); }
-        else markMyVotes();
-      });
+      // Just came back from the hosted sign-in with a queued vote? Cast it now.
+      if (signedIn()) {
+        var p = loadPending();
+        if (p) { clearPending(); doVote(p.topicId, p.body); }
+      }
+      window.Clerk.addListener(function () { renderAuth(); markMyVotes(); });
     }).catch(function () {});
   }
   var clerkTries = 0;
