@@ -32,18 +32,6 @@ async function getUserId(req: any): Promise<string | null> {
   }
 }
 
-// Voting is open to anonymous web voters: a signed-in Clerk user if present,
-// otherwise a device id sent as `x-anon-id` (namespaced so it can never collide
-// with a Clerk user id). Used only for voting — creating topics and commenting
-// still require a real signed-in account.
-async function getVoterId(req: any): Promise<string | null> {
-  const clerk = await getUserId(req);
-  if (clerk) return clerk;
-  const anon = req.headers["x-anon-id"];
-  if (typeof anon === "string" && /^[A-Za-z0-9_-]{8,64}$/.test(anon)) return "anon_" + anon;
-  return null;
-}
-
 // Port of applyDemoToBreakdown from the app's AppContext: add/remove one voter's
 // demographics from a topic's running breakdown.
 function applyDemo(breakdown: DemoBreakdown, demo: Demo | null | undefined, delta: 1 | -1): DemoBreakdown {
@@ -100,7 +88,7 @@ router.get("/topics", async (_req, res) => {
 // GET /topics/me/votes — the signed-in user's votes, keyed by topic id.
 router.get("/topics/me/votes", async (req: any, res) => {
   try {
-    const userId = await getVoterId(req);
+    const userId = await getUserId(req);
     if (!userId) return res.json({ votes: {} });
     const rows = await db.select().from(topicVotes).where(eq(topicVotes.userId, userId));
     const votes: Record<string, any> = {};
@@ -189,7 +177,7 @@ router.post("/topics", async (req: any, res) => {
 // voteYesNo / voteRating / voteRanking / voteAspect.
 router.post("/topics/:id/vote", async (req: any, res) => {
   try {
-    const userId = await getVoterId(req);
+    const userId = await getUserId(req);
     if (!userId) return res.status(401).json({ error: "Unauthorized" });
 
     const topicId = req.params.id;

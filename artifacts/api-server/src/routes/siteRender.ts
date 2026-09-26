@@ -20,6 +20,12 @@ const C = {
 
 const PLAY_URL = "https://play.google.com/store/apps/details?id=app.askopinion";
 
+// Web sign-in uses the same Clerk production instance as the app, so a person has
+// one identity across web and app. The publishable key is public by design; it
+// only works on askopinion.app (production keys refuse other origins).
+const CLERK_PK = "pk_live_Y2xlcmsuYXNrb3Bpbmlvbi5hcHAk";
+const CLERK_JS = "https://clerk.askopinion.app/npm/@clerk/clerk-js@6/dist/clerk.browser.js";
+
 const CATEGORY_CONFIG: Record<string, { label: string; color: string }> = {
   food: { label: "Food", color: "#f97316" },
   tech: { label: "Tech", color: "#3b82f6" },
@@ -405,6 +411,7 @@ function shell(o: ShellOptions): string {
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script async crossorigin="anonymous" data-clerk-publishable-key="${CLERK_PK}" src="${CLERK_JS}" type="text/javascript"></script>
 <style>
   *, *::before, *::after { box-sizing: border-box; }
   :root {
@@ -450,6 +457,17 @@ function shell(o: ShellOptions): string {
     border-radius: 100px; padding: 7px 14px; font-weight: 600;
   }
   .nav-cta:hover { background: color-mix(in srgb, var(--accent) 26%, transparent); }
+  .authslot { display: inline-flex; align-items: center; }
+  .signin-btn {
+    font: inherit; font-size: 14px; font-weight: 600; cursor: pointer;
+    background: transparent; color: var(--fg); border: 1px solid var(--border);
+    border-radius: 100px; padding: 7px 16px; transition: border-color .2s;
+  }
+  .signin-btn:hover { border-color: var(--dim); }
+  .userchip { display: inline-flex; align-items: center; gap: 8px; }
+  .userchip .uname { font-size: 13.5px; color: var(--dim); max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .userchip .signout { font: inherit; font-size: 13px; cursor: pointer; background: transparent; color: var(--accent); border: none; padding: 0; }
+  .userchip .signout:hover { text-decoration: underline; }
   .live-dot { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 700; color: var(--accent); letter-spacing: .4px; }
   .live-dot i { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 8px var(--accent); animation: pulse 2.4s ease-in-out infinite; }
   @keyframes pulse { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: .3; transform: scale(.75); } }
@@ -797,7 +815,8 @@ function shell(o: ShellOptions): string {
       <span class="live-dot"><i></i>LIVE</span>
       <a href="/"${resultsOn ? ' class="on"' : ""}>Results</a>
       <a href="/insights"${insightsOn ? ' class="on"' : ""}>Insights</a>
-      <a href="${PLAY_URL}" class="nav-cta">Get the app</a>
+      <span id="authslot" class="authslot"></span>
+      <a href="${PLAY_URL}" class="nav-cta hide-sm">Get the app</a>
     </nav>
   </div>
 </header>
@@ -826,22 +845,39 @@ function shell(o: ShellOptions): string {
 (function () {
   var filter = "all";
   var rankSel = [];
+  var pendingVote = null;
 
-  // Anonymous voter id: one vote per device. localStorage, with an in-memory
-  // fallback for private mode where storage throws.
-  function anonId() {
-    try {
-      var k = "opinion_anon_id";
-      var v = localStorage.getItem(k);
-      if (!v) {
-        v = (Date.now().toString(36) + Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2)).slice(0, 32);
-        localStorage.setItem(k, v);
-      }
-      return v;
-    } catch (e) {
-      if (!window.__anon) window.__anon = (Date.now().toString(36) + Math.random().toString(36).slice(2) + "x").slice(0, 32);
-      return window.__anon;
+  // Sign-in state via Clerk (loaded async from the <head> script). Voting needs
+  // a real account, so a signed-out click opens the sign-in modal first.
+  function signedIn() { return !!(window.Clerk && window.Clerk.user); }
+  function getToken() {
+    if (!window.Clerk || !window.Clerk.session) return Promise.resolve(null);
+    return window.Clerk.session.getToken().catch(function () { return null; });
+  }
+  function authHeaders(extra) {
+    return getToken().then(function (tok) {
+      var h = extra || {};
+      if (tok) h["Authorization"] = "Bearer " + tok;
+      return h;
+    });
+  }
+  function promptSignIn() { if (window.Clerk && window.Clerk.openSignIn) window.Clerk.openSignIn({}); }
+  function updateVoteHint() {
+    if (!document.querySelector(".vote-panel")) return;
+    if (!signedIn()) setStatus("Sign in to cast your vote — it takes 10 seconds.");
+  }
+  function renderAuth() {
+    var slot = document.getElementById("authslot");
+    if (!slot) return;
+    if (signedIn()) {
+      var u = window.Clerk.user;
+      var name = u.firstName || (u.primaryEmailAddress && u.primaryEmailAddress.emailAddress) || "Account";
+      slot.innerHTML = '<span class="userchip"><span class="uname"></span><button class="signout" type="button">Sign out</button></span>';
+      var un = slot.querySelector(".uname"); if (un) un.textContent = name;
+    } else {
+      slot.innerHTML = '<button class="signin-btn" type="button">Sign in</button>';
     }
+    updateVoteHint();
   }
 
   function applyFilter() {
@@ -868,9 +904,9 @@ function shell(o: ShellOptions): string {
 
   function markMyVotes() {
     var panel = document.querySelector(".vote-panel");
-    if (!panel) return;
+    if (!panel || !signedIn()) return;
     var topicId = panel.getAttribute("data-topic");
-    fetch("/api/topics/me/votes", { headers: { "x-anon-id": anonId() } })
+    authHeaders().then(function (h) { return fetch("/api/topics/me/votes", { headers: h }); })
       .then(function (r) { return r.json(); })
       .then(function (data) {
         var v = data && data.votes && data.votes[topicId];
@@ -919,26 +955,45 @@ function shell(o: ShellOptions): string {
         applyFilter();
         markMyVotes();
         updateRankUI();
+        updateVoteHint();
         if (cb) cb();
       })
       .catch(function () { if (cb) cb(); });
   }
 
   function castVote(topicId, body) {
+    if (!signedIn()) {
+      pendingVote = { topicId: topicId, body: body };
+      setStatus("Sign in to lock in your vote…");
+      promptSignIn();
+      return;
+    }
+    doVote(topicId, body);
+  }
+
+  function doVote(topicId, body) {
     setStatus("Saving your vote…");
-    fetch("/api/topics/" + topicId + "/vote", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "x-anon-id": anonId() },
-      body: JSON.stringify(body)
+    authHeaders({ "Content-Type": "application/json" }).then(function (h) {
+      return fetch("/api/topics/" + topicId + "/vote", { method: "POST", headers: h, body: JSON.stringify(body) });
     })
-      .then(function (r) { if (!r.ok) throw new Error("vote failed"); return r.json(); })
+      .then(function (r) {
+        if (r.status === 401) throw new Error("unauth");
+        if (!r.ok) throw new Error("vote failed");
+        return r.json();
+      })
       .then(function () { rankSel = []; refreshLive(function () { setStatus("✓ Your vote is in — thanks!"); }); })
-      .catch(function () { setStatus("Couldn't save your vote. Please try again."); });
+      .catch(function (err) {
+        if (err && err.message === "unauth") { setStatus("Please sign in to vote."); promptSignIn(); }
+        else setStatus("Couldn't save your vote. Please try again.");
+      });
   }
 
   document.addEventListener("click", function (e) {
     var t = e.target;
     function closest(sel) { return t && t.closest ? t.closest(sel) : null; }
+
+    if (closest(".signin-btn")) { e.preventDefault(); promptSignIn(); return; }
+    if (closest(".signout")) { e.preventDefault(); if (window.Clerk) window.Clerk.signOut(); return; }
 
     var chip = closest(".chip");
     if (chip) { e.preventDefault(); filter = chip.getAttribute("data-cat"); applyFilter(); return; }
@@ -988,7 +1043,25 @@ function shell(o: ShellOptions): string {
     for (var i = 0; i < stars.length; i++) stars[i].classList.remove("hot");
   });
 
-  markMyVotes();
+  // Clerk loads async from the <head> script; wait for it, then wire auth,
+  // personal vote marks, and replay a vote the user queued before signing in.
+  function initClerk() {
+    window.Clerk.load().then(function () {
+      renderAuth();
+      markMyVotes();
+      window.Clerk.addListener(function () {
+        renderAuth();
+        if (signedIn() && pendingVote) { var pv = pendingVote; pendingVote = null; doVote(pv.topicId, pv.body); }
+        else markMyVotes();
+      });
+    }).catch(function () {});
+  }
+  var clerkTries = 0;
+  var clerkWait = setInterval(function () {
+    clerkTries++;
+    if (window.Clerk && window.Clerk.load) { clearInterval(clerkWait); initClerk(); }
+    else if (clerkTries > 100) { clearInterval(clerkWait); }
+  }, 200);
 
   setInterval(function () {
     if (document.hidden) return;
