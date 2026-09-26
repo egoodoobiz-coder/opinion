@@ -687,6 +687,14 @@ function shell(o: ShellOptions): string {
   .comment-author { font-size: 13px; font-weight: 600; }
   .comment-date { font-size: 11.5px; color: var(--dim); font-variant-numeric: tabular-nums; }
   .comment-text { margin: 0; font-size: 14px; color: var(--fg); }
+  .comment-compose { margin-bottom: 18px; }
+  .comment-input { width: 100%; resize: vertical; min-height: 62px; font: inherit; font-size: 14px; color: var(--fg); background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; }
+  .comment-input:focus { outline: none; border-color: var(--accent); }
+  .comment-input::placeholder { color: var(--dim); }
+  .comment-compose-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 8px; }
+  .comment-hint { font-size: 12.5px; color: var(--dim); }
+  .comment-post { font: inherit; font-weight: 600; font-size: 14px; cursor: pointer; border: none; border-radius: 100px; padding: 9px 18px; background: linear-gradient(96deg, var(--accent), var(--primary)); color: #04121a; }
+  .comment-post:disabled { opacity: .5; cursor: not-allowed; }
 
   .detail-cta {
     display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px;
@@ -998,12 +1006,49 @@ function shell(o: ShellOptions): string {
       });
   }
 
+  function setCommentHint(msg) { var h = document.querySelector(".comment-hint"); if (h) h.textContent = msg || ""; }
+  function saveCommentDraft(text) { try { localStorage.setItem("opinion_comment_draft", text); } catch (e) {} }
+  function loadCommentDraft() { try { return localStorage.getItem("opinion_comment_draft") || ""; } catch (e) { return ""; } }
+  function clearCommentDraft() { try { localStorage.removeItem("opinion_comment_draft"); } catch (e) {} }
+  function postComment(topicId, text, input) {
+    setCommentHint("Posting…");
+    var u = window.Clerk && window.Clerk.user;
+    var name = (u && (u.firstName || (u.primaryEmailAddress && u.primaryEmailAddress.emailAddress))) || "Anonymous";
+    authHeaders({ "Content-Type": "application/json" }).then(function (h) {
+      return fetch("/api/topics/" + topicId + "/comments", { method: "POST", headers: h, body: JSON.stringify({ text: text, authorName: name }) });
+    }).then(function (r) {
+      if (r.status === 401) throw new Error("unauth");
+      if (!r.ok) throw new Error("comment failed");
+      return r.json();
+    }).then(function () {
+      if (input) input.value = "";
+      setCommentHint("Comment posted — thanks!");
+      refreshLive();
+    }).catch(function (err) {
+      if (err && err.message === "unauth") { saveCommentDraft(text); goSignIn(); }
+      else setCommentHint("Couldn't post — try again.");
+    });
+  }
+
   document.addEventListener("click", function (e) {
     var t = e.target;
     function closest(sel) { return t && t.closest ? t.closest(sel) : null; }
 
     if (closest(".signin-btn")) { e.preventDefault(); goSignIn(); return; }
     if (closest(".signout")) { e.preventDefault(); if (window.Clerk) window.Clerk.signOut(); return; }
+
+    var cpost = closest(".comment-post");
+    if (cpost) {
+      e.preventDefault();
+      var box = closest(".comment-compose") || document.querySelector(".comment-compose");
+      var input = box ? box.querySelector(".comment-input") : null;
+      var text = input ? input.value.trim() : "";
+      if (!text) { setCommentHint("Write something first."); return; }
+      var cTopic = box ? box.getAttribute("data-topic") : null;
+      if (!signedIn()) { setCommentHint("Taking you to sign in…"); saveCommentDraft(text); goSignIn(); return; }
+      postComment(cTopic, text, input);
+      return;
+    }
 
     var chip = closest(".chip");
     if (chip) { e.preventDefault(); filter = chip.getAttribute("data-cat"); applyFilter(); return; }
@@ -1063,6 +1108,8 @@ function shell(o: ShellOptions): string {
       if (signedIn()) {
         var p = loadPending();
         if (p) { clearPending(); doVote(p.topicId, p.body); }
+        var draft = loadCommentDraft();
+        if (draft) { var ci = document.querySelector(".comment-input"); if (ci) ci.value = draft; clearCommentDraft(); }
       }
       window.Clerk.addListener(function () { renderAuth(); markMyVotes(); });
     }).catch(function () {});
@@ -1104,7 +1151,7 @@ export function renderPage(list: SiteTopic[]): string {
 /* -------------------------------------------------------------- topic page */
 
 function renderComments(comments: SiteComment[]): string {
-  if (comments.length === 0) return `<p class="novotes">No comments yet — the conversation starts in the app.</p>`;
+  if (comments.length === 0) return `<p class="novotes">No comments yet — be the first.</p>`;
   return `<div class="comments">${comments
     .slice(0, 50)
     .map(
@@ -1142,6 +1189,13 @@ export function renderTopicPage(t: SiteTopic, comments: SiteComment[]): string {
     ${tags.length ? `<div class="tags">${tags.map((h) => `<span>#${esc(h)}</span>`).join("")}</div>` : ""}
     <section class="analysis" style="--i:2">
       <h2 class="sec-h">Comments${t.commentCount ? " · " + fmt(t.commentCount) : ""}</h2>
+      <div class="comment-compose" data-topic="${esc(t.id)}">
+        <textarea class="comment-input" placeholder="Add your comment…" maxlength="500" rows="3"></textarea>
+        <div class="comment-compose-row">
+          <span class="comment-hint"></span>
+          <button class="comment-post" type="button">Post comment</button>
+        </div>
+      </div>
       ${renderComments(comments)}
     </section>
     <div class="detail-cta">
