@@ -24,7 +24,7 @@ const PLAY_URL = "https://play.google.com/store/apps/details?id=app.askopinion";
 // one identity across web and app. The publishable key is public by design; it
 // only works on askopinion.app (production keys refuse other origins).
 const CLERK_PK = "pk_live_Y2xlcmsuYXNrb3Bpbmlvbi5hcHAk";
-const CLERK_JS = "https://clerk.askopinion.app/npm/@clerk/clerk-js@6/dist/clerk.browser.js";
+const CLERK_JS = "https://clerk.askopinion.app/npm/@clerk/clerk-js@latest/dist/clerk.browser.js";
 
 const CATEGORY_CONFIG: Record<string, { label: string; color: string }> = {
   food: { label: "Food", color: "#f97316" },
