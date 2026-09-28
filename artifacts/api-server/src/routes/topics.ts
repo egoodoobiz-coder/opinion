@@ -32,6 +32,21 @@ async function getUserId(req: any): Promise<string | null> {
   }
 }
 
+// Voter identity for casting/reading votes: a signed-in Clerk user id when
+// present, otherwise an anonymous id the client sends via the x-anon-id header
+// (namespaced "anon_" so it can never collide with a Clerk id). This lets people
+// vote on the web with one tap, no sign-up — while topic creation and comments
+// still require a real account. The header is validated to a safe id shape.
+async function getVoterId(req: any): Promise<string | null> {
+  const userId = await getUserId(req);
+  if (userId) return userId;
+  const anon = req.headers["x-anon-id"];
+  if (typeof anon === "string" && /^[A-Za-z0-9_-]{8,64}$/.test(anon)) {
+    return "anon_" + anon;
+  }
+  return null;
+}
+
 // Port of applyDemoToBreakdown from the app's AppContext: add/remove one voter's
 // demographics from a topic's running breakdown.
 function applyDemo(breakdown: DemoBreakdown, demo: Demo | null | undefined, delta: 1 | -1): DemoBreakdown {
@@ -88,7 +103,7 @@ router.get("/topics", async (_req, res) => {
 // GET /topics/me/votes — the signed-in user's votes, keyed by topic id.
 router.get("/topics/me/votes", async (req: any, res) => {
   try {
-    const userId = await getUserId(req);
+    const userId = await getVoterId(req);
     if (!userId) return res.json({ votes: {} });
     const rows = await db.select().from(topicVotes).where(eq(topicVotes.userId, userId));
     const votes: Record<string, any> = {};
@@ -177,7 +192,7 @@ router.post("/topics", async (req: any, res) => {
 // voteYesNo / voteRating / voteRanking / voteAspect.
 router.post("/topics/:id/vote", async (req: any, res) => {
   try {
-    const userId = await getUserId(req);
+    const userId = await getVoterId(req);
     if (!userId) return res.status(401).json({ error: "Unauthorized" });
 
     const topicId = req.params.id;

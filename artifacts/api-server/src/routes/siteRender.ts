@@ -865,10 +865,21 @@ function shell(o: ShellOptions): string {
     if (!window.Clerk || !window.Clerk.session) return Promise.resolve(null);
     return window.Clerk.session.getToken().catch(function () { return null; });
   }
+  // Stable per-browser anonymous id so people can vote with one tap, no sign-up.
+  // The server namespaces it ("anon_") and validates the shape.
+  function anonId() {
+    try {
+      var k = "opinion_anon_id";
+      var v = localStorage.getItem(k);
+      if (!v) { v = "a" + Date.now().toString(36) + Math.random().toString(36).slice(2, 12); localStorage.setItem(k, v); }
+      return v;
+    } catch (e) { return "a" + Date.now().toString(36); }
+  }
   function authHeaders(extra) {
     return getToken().then(function (tok) {
       var h = extra || {};
       if (tok) h["Authorization"] = "Bearer " + tok;
+      h["x-anon-id"] = anonId();
       return h;
     });
   }
@@ -883,7 +894,7 @@ function shell(o: ShellOptions): string {
   }
   function updateVoteHint() {
     if (!document.querySelector(".vote-panel")) return;
-    if (!signedIn()) setStatus("Sign in to cast your vote — it takes 10 seconds.");
+    if (!signedIn()) setStatus("Tap to vote — no sign-up needed.");
   }
   function renderAuth() {
     var slot = document.getElementById("authslot");
@@ -923,7 +934,7 @@ function shell(o: ShellOptions): string {
 
   function markMyVotes() {
     var panel = document.querySelector(".vote-panel");
-    if (!panel || !signedIn()) return;
+    if (!panel) return;
     var topicId = panel.getAttribute("data-topic");
     authHeaders().then(function (h) { return fetch("/api/topics/me/votes", { headers: h }); })
       .then(function (r) { return r.json(); })
@@ -980,12 +991,9 @@ function shell(o: ShellOptions): string {
       .catch(function () { if (cb) cb(); });
   }
 
+  // One-tap voting: no sign-in required. The vote is attributed to the Clerk
+  // account when signed in, otherwise to the anonymous browser id.
   function castVote(topicId, body) {
-    if (!signedIn()) {
-      setStatus("Taking you to sign in…");
-      goSignIn(topicId, body);
-      return;
-    }
     doVote(topicId, body);
   }
 
@@ -995,15 +1003,11 @@ function shell(o: ShellOptions): string {
       return fetch("/api/topics/" + topicId + "/vote", { method: "POST", headers: h, body: JSON.stringify(body) });
     })
       .then(function (r) {
-        if (r.status === 401) throw new Error("unauth");
         if (!r.ok) throw new Error("vote failed");
         return r.json();
       })
       .then(function () { rankSel = []; refreshLive(function () { setStatus("✓ Your vote is in — thanks!"); }); })
-      .catch(function (err) {
-        if (err && err.message === "unauth") { setStatus("Please sign in to vote."); goSignIn(topicId, body); }
-        else setStatus("Couldn't save your vote. Please try again.");
-      });
+      .catch(function () { setStatus("Couldn't save your vote. Please try again."); });
   }
 
   function setCommentHint(msg) { var h = document.querySelector(".comment-hint"); if (h) h.textContent = msg || ""; }
