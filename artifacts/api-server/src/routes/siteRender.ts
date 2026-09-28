@@ -467,10 +467,42 @@ function shell(o: ShellOptions): string {
     border-radius: 100px; padding: 7px 16px; transition: border-color .2s;
   }
   .signin-btn:hover { border-color: var(--dim); }
-  .userchip { display: inline-flex; align-items: center; gap: 8px; }
-  .userchip .uname { font-size: 13.5px; color: var(--dim); max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .userchip .signout { font: inherit; font-size: 13px; cursor: pointer; background: transparent; color: var(--accent); border: none; padding: 0; }
-  .userchip .signout:hover { text-decoration: underline; }
+  .userchip { position: relative; display: inline-flex; align-items: center; }
+  .avatar-btn {
+    display: inline-flex; align-items: center; justify-content: center; cursor: pointer;
+    width: 36px; height: 36px; border-radius: 50%; padding: 0; overflow: hidden;
+    background: linear-gradient(150deg, var(--accent), var(--accent2)); color: #04121a;
+    border: 1px solid var(--border); font: inherit; font-weight: 800; font-size: 15px;
+  }
+  .avatar-btn img { width: 100%; height: 100%; object-fit: cover; }
+  .avatar-btn:hover { filter: brightness(1.08); }
+  .profile-card {
+    position: absolute; top: 46px; right: 0; width: 280px; z-index: 60;
+    background: var(--card); border: 1px solid var(--border); border-radius: 16px;
+    box-shadow: 0 20px 50px rgba(0,0,0,.5); padding: 18px; display: none;
+  }
+  .profile-card.open { display: block; }
+  .pc-head { display: flex; align-items: center; gap: 12px; }
+  .pc-av {
+    width: 46px; height: 46px; border-radius: 50%; flex: none; overflow: hidden;
+    display: flex; align-items: center; justify-content: center;
+    background: linear-gradient(150deg, var(--accent), var(--accent2)); color: #04121a; font-weight: 800; font-size: 18px;
+  }
+  .pc-av img { width: 100%; height: 100%; object-fit: cover; }
+  .pc-id { min-width: 0; }
+  .pc-name { font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pc-email { font-size: 12.5px; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pc-badges { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+  .pc-badge { font-size: 11px; font-weight: 700; letter-spacing: .3px; border-radius: 100px; padding: 4px 10px; }
+  .pc-badge.verified { color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); border: 1px solid color-mix(in srgb, var(--accent) 34%, transparent); }
+  .pc-badge.premium { color: var(--gold, #ffc33a); background: color-mix(in srgb, #ffc33a 15%, transparent); border: 1px solid color-mix(in srgb, #ffc33a 36%, transparent); }
+  .pc-stats { display: flex; margin: 14px 0; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+  .pc-stat { flex: 1; text-align: center; padding: 10px 4px; border-right: 1px solid var(--border); }
+  .pc-stat:last-child { border-right: none; }
+  .pc-stat b { display: block; font-family: 'Space Grotesk', sans-serif; font-size: 18px; }
+  .pc-stat span { font-size: 10.5px; color: var(--dim); text-transform: uppercase; letter-spacing: .4px; }
+  .pc-signout { width: 100%; font: inherit; font-weight: 600; font-size: 14px; cursor: pointer; background: transparent; color: var(--fg); border: 1px solid var(--border); border-radius: 100px; padding: 9px; }
+  .pc-signout:hover { border-color: var(--dim); }
   .live-dot { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 700; color: var(--accent); letter-spacing: .4px; }
   .live-dot i { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 8px var(--accent); animation: pulse 2.4s ease-in-out infinite; }
   @keyframes pulse { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: .3; transform: scale(.75); } }
@@ -908,14 +940,63 @@ function shell(o: ShellOptions): string {
     if (!document.querySelector(".vote-panel")) return;
     if (!signedIn()) setStatus("Tap to vote — no sign-up needed.");
   }
+  function voiceLabel(v) {
+    var m = { expert: "Expert", brand: "Brand", "public": "Public figure", creator: "Creator" };
+    return m[v] || "Verified";
+  }
+  function loadProfile() {
+    authHeaders().then(function (h) { return fetch("/api/me", { headers: h }); })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) {
+        if (!d) return;
+        var badges = document.querySelector(".pc-badges");
+        if (badges) {
+          var html = "";
+          if (d.isVerified) html += '<span class="pc-badge verified">✓ ' + voiceLabel(d.voiceType) + "</span>";
+          if (d.isPremium) html += '<span class="pc-badge premium">★ Premium</span>';
+          badges.innerHTML = html;
+        }
+        var sv = document.querySelector(".st-votes"); if (sv) sv.textContent = d.voteCount || 0;
+        var st = document.querySelector(".st-topics"); if (st) st.textContent = d.topicCount || 0;
+        var sc = document.querySelector(".st-comments"); if (sc) sc.textContent = d.commentCount || 0;
+      })
+      .catch(function () {});
+  }
   function renderAuth() {
     var slot = document.getElementById("authslot");
     if (!slot) return;
     if (signedIn()) {
       var u = window.Clerk.user;
-      var name = u.firstName || (u.primaryEmailAddress && u.primaryEmailAddress.emailAddress) || "Account";
-      slot.innerHTML = '<span class="userchip"><span class="uname"></span><button class="signout" type="button">Sign out</button></span>';
-      var un = slot.querySelector(".uname"); if (un) un.textContent = name;
+      var email = (u.primaryEmailAddress && u.primaryEmailAddress.emailAddress) || "";
+      var name = u.fullName || u.firstName || email || "Account";
+      var img = u.imageUrl || "";
+      var initial = (name || email || "?").trim().charAt(0).toUpperCase() || "?";
+      slot.innerHTML =
+        '<span class="userchip">' +
+          '<button class="avatar-btn" type="button" aria-label="Your profile"></button>' +
+          '<div class="profile-card">' +
+            '<div class="pc-head"><div class="pc-av"></div>' +
+              '<div class="pc-id"><div class="pc-name"></div><div class="pc-email"></div></div></div>' +
+            '<div class="pc-badges"></div>' +
+            '<div class="pc-stats">' +
+              '<div class="pc-stat"><b class="st-votes">–</b><span>Votes</span></div>' +
+              '<div class="pc-stat"><b class="st-topics">–</b><span>Topics</span></div>' +
+              '<div class="pc-stat"><b class="st-comments">–</b><span>Comments</span></div>' +
+            '</div>' +
+            '<button class="pc-signout" type="button">Sign out</button>' +
+          '</div>' +
+        '</span>';
+      var avBtn = slot.querySelector(".avatar-btn");
+      var pcAv = slot.querySelector(".pc-av");
+      if (img) {
+        var i1 = document.createElement("img"); i1.alt = ""; i1.src = img; avBtn.appendChild(i1);
+        var i2 = document.createElement("img"); i2.alt = ""; i2.src = img; pcAv.appendChild(i2);
+      } else {
+        avBtn.textContent = initial; pcAv.textContent = initial;
+      }
+      slot.querySelector(".pc-name").textContent = name;
+      slot.querySelector(".pc-email").textContent = email;
+      loadProfile();
     } else {
       slot.innerHTML = '<button class="signin-btn" type="button">Sign in</button>';
     }
@@ -1051,7 +1132,18 @@ function shell(o: ShellOptions): string {
     function closest(sel) { return t && t.closest ? t.closest(sel) : null; }
 
     if (closest(".signin-btn")) { e.preventDefault(); goSignIn(); return; }
-    if (closest(".signout")) { e.preventDefault(); if (window.Clerk) window.Clerk.signOut(); return; }
+    if (closest(".pc-signout") || closest(".signout")) { e.preventDefault(); if (window.Clerk) window.Clerk.signOut(); return; }
+    if (closest(".avatar-btn")) {
+      e.preventDefault();
+      var card = document.querySelector(".profile-card");
+      if (card) card.classList.toggle("open");
+      return;
+    }
+    // click anywhere else closes an open profile card
+    if (!closest(".profile-card")) {
+      var openCard = document.querySelector(".profile-card.open");
+      if (openCard) openCard.classList.remove("open");
+    }
 
     var cpost = closest(".comment-post");
     if (cpost) {

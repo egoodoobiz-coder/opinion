@@ -147,6 +147,31 @@ router.get("/topics/me/votes", async (req: any, res) => {
   }
 });
 
+// GET /me — the signed-in user's profile card data: verification/premium flags
+// (server-authoritative) plus lightweight activity counts. Identity fields
+// (name, email, avatar) come from Clerk on the client.
+router.get("/me", async (req: any, res) => {
+  try {
+    const userId = await getUserId(req);
+    if (!userId) return res.status(401).json({ error: "Unauthorized" });
+    const [u] = await db.select().from(users).where(eq(users.id, userId));
+    const votes = await db.select().from(topicVotes).where(eq(topicVotes.userId, userId));
+    const created = await db.select().from(topics).where(eq(topics.createdBy, userId));
+    const comments = await db.select().from(topicComments).where(eq(topicComments.authorId, userId));
+    res.json({
+      isPremium: !!u?.isPremium,
+      isVerified: !!u?.isVerified,
+      voiceType: u?.voiceType ?? null,
+      voteCount: votes.length,
+      topicCount: created.length,
+      commentCount: comments.length,
+    });
+  } catch (err) {
+    logger.error({ err }, "me GET error");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 // GET /topics/:id — a single topic (public). Breakdown gated to premium.
 router.get("/topics/:id", async (req: any, res) => {
   try {
