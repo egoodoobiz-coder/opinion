@@ -21,6 +21,21 @@ const router: IRouter = Router();
 const cache: Record<string, { at: number; html: string }> = {};
 const CACHE_MS = 15000;
 
+// Website campaign focus: the public homepage/insights show ONLY these topic ids
+// so the poll we're actively promoting isn't buried under the others. Set the
+// SITE_FEATURED_TOPIC_IDS env (comma-separated) to swap which poll is featured,
+// or "all" to show everything. The app feed (/api/topics) and direct
+// /topic/:id links are unaffected — every poll stays reachable.
+const FEATURED_TOPIC_IDS = (
+  process.env.SITE_FEATURED_TOPIC_IDS ?? "073a404c-adad-47b6-88ad-03cb8e3c48ef"
+)
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
+const FEATURE_ALL =
+  FEATURED_TOPIC_IDS.length === 0 ||
+  FEATURED_TOPIC_IDS.some((s) => s.toLowerCase() === "all");
+
 // One shape, one mapping — the feed and the per-topic page read rows the same way.
 function mapRow(r: any, commentCount: number, latestComment: SiteTopic["latestComment"]): SiteTopic {
   return {
@@ -64,9 +79,18 @@ async function loadTopics(): Promise<SiteTopic[]> {
     }
   }
 
-  return (rows as any[]).map((r) =>
+  const list = (rows as any[]).map((r) =>
     mapRow(r, counts[r.id] ?? 0, latest[r.id] ? { authorName: latest[r.id].authorName, text: latest[r.id].text } : null),
   );
+
+  if (!FEATURE_ALL) {
+    const wanted = new Set(FEATURED_TOPIC_IDS);
+    const only = list.filter((t) => wanted.has(t.id));
+    // Fall back to the full list if the featured ids matched nothing, so the
+    // homepage is never accidentally blank.
+    if (only.length) return only;
+  }
+  return list;
 }
 
 async function loadTopic(id: string): Promise<{ topic: SiteTopic; comments: SiteComment[] } | null> {
