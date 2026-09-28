@@ -11,7 +11,6 @@ import {
   type SiteTopic,
   type SiteComment,
   type AspectVotes,
-  type DemoBreakdown,
   type RankingOption,
   type RankingVotes,
 } from "./siteRender";
@@ -56,7 +55,9 @@ function mapRow(r: any, commentCount: number, latestComment: SiteTopic["latestCo
     ratingCount: r.ratingCount ?? 0,
     rankingVotes: (r.rankingVotes as RankingVotes) ?? {},
     aspectVotes: (r.aspectVotes as AspectVotes) ?? {},
-    demoBreakdown: (r.demoBreakdown as DemoBreakdown) ?? {},
+    // Demographic breakdown is premium-only, so it's never baked into the public
+    // HTML. Premium viewers unlock it client-side via /api/topics/:id/insights.
+    demoBreakdown: {},
     commentCount,
     latestComment,
   };

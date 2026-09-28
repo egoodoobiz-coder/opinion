@@ -757,6 +757,18 @@ function shell(o: ShellOptions): string {
   .demo-bucket { font-size: 12px; color: var(--fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .demo-n { font-size: 11.5px; color: var(--dim); text-align: right; font-variant-numeric: tabular-nums; }
 
+  /* premium insights lock */
+  .insights-panel { position: relative; }
+  .insights-locked { text-align: center; padding: 30px 22px; }
+  .insights-locked .lock-badge { display: inline-block; font-size: 12px; font-weight: 700; letter-spacing: .6px; color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); border: 1px solid color-mix(in srgb, var(--accent) 34%, transparent); border-radius: 100px; padding: 6px 14px; }
+  .insights-locked .lock-title { margin: 14px 0 4px; font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 20px; }
+  .insights-locked .lock-sub { margin: 0 auto; max-width: 420px; font-size: 13.5px; color: var(--dim); line-height: 1.5; }
+  .demo-group { margin-top: 14px; }
+  .demo-group:first-child { margin-top: 0; }
+  .demo-group h3 { margin: 0 0 8px; font-size: 12px; text-transform: uppercase; letter-spacing: .7px; color: var(--dim); }
+  .demo-track { height: 6px; background: var(--muted); border-radius: 3px; overflow: hidden; }
+  .demo-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent2)); }
+
   .picks { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 0; padding: 0; }
   .pick { padding: 18px 20px; border-right: 1px solid var(--border); display: flex; flex-direction: column; gap: 3px; }
   .pick:last-child { border-right: none; }
@@ -1104,10 +1116,48 @@ function shell(o: ShellOptions): string {
 
   // Clerk loads async from the <head> script; wait for it, then wire auth,
   // personal vote marks, and replay a vote the user queued before signing in.
+  // Premium "Who voted" breakdown. The public HTML ships only a locked card;
+  // signed-in premium members fetch the real data and we render it in place.
+  var DEMO_LABELS = { ageRange: "Age", gender: "Gender", country: "Country", occupation: "Occupation" };
+  function renderInsights(panel, breakdown) {
+    var html = "";
+    for (var field in breakdown) {
+      if (!breakdown.hasOwnProperty(field)) continue;
+      var buckets = breakdown[field] || {};
+      var total = 0, keys = [];
+      for (var k in buckets) { if (buckets.hasOwnProperty(k)) { total += buckets[k]; keys.push(k); } }
+      if (!total) continue;
+      keys.sort(function (a, b) { return buckets[b] - buckets[a]; });
+      var label = DEMO_LABELS[field] || field;
+      html += '<div class="demo-group"><h3>' + label + "</h3>";
+      for (var i = 0; i < keys.length; i++) {
+        var pct = Math.round((buckets[keys[i]] / total) * 100);
+        html += '<div class="demo-row"><span class="demo-bucket">' + keys[i] +
+          '</span><span class="demo-track"><span class="demo-fill" style="width:' + pct + '%"></span></span>' +
+          '<span class="demo-n">' + pct + "%</span></div>";
+      }
+      html += "</div>";
+    }
+    panel.innerHTML = html || '<div class="insights-locked"><p class="lock-sub">No demographic data yet — check back once more people vote.</p></div>';
+  }
+  function loadInsights() {
+    var panel = document.querySelector(".insights-panel");
+    if (!panel || !signedIn()) return;
+    var topicId = panel.getAttribute("data-insights");
+    authHeaders().then(function (h) { return fetch("/api/topics/" + topicId + "/insights", { headers: h }); })
+      .then(function (r) {
+        if (r.status === 200) return r.json();
+        return null; // 401/403 → not premium, keep the locked card
+      })
+      .then(function (data) { if (data && data.demoBreakdown) renderInsights(panel, data.demoBreakdown); })
+      .catch(function () {});
+  }
+
   function initClerk() {
     window.Clerk.load().then(function () {
       renderAuth();
       markMyVotes();
+      loadInsights();
       // Just came back from the hosted sign-in with a queued vote? Cast it now.
       if (signedIn()) {
         var p = loadPending();
@@ -1115,7 +1165,7 @@ function shell(o: ShellOptions): string {
         var draft = loadCommentDraft();
         if (draft) { var ci = document.querySelector(".comment-input"); if (ci) ci.value = draft; clearCommentDraft(); }
       }
-      window.Clerk.addListener(function () { renderAuth(); markMyVotes(); });
+      window.Clerk.addListener(function () { renderAuth(); markMyVotes(); loadInsights(); });
     }).catch(function () {});
   }
   var clerkTries = 0;
@@ -1175,21 +1225,22 @@ export function renderTopicPage(t: SiteTopic, comments: SiteComment[]): string {
   const part = participation(t);
   const author = t.createdByName ?? "Opinion";
   const tags = (t.hashtags ?? []).slice(0, 6);
-  const demo = renderDemoPanel(t);
 
   const body = `
     <section class="analysis" style="--i:0">
       <h2 class="sec-h">Cast your vote</h2>
       ${renderVoteWidget(t)}
     </section>
-    ${
-      demo
-        ? `<section class="analysis" style="--i:1">
-            <h2 class="sec-h">Who voted</h2>
-            <div class="panel">${demo}</div>
-          </section>`
-        : ""
-    }
+    <section class="analysis" style="--i:1">
+      <h2 class="sec-h">Who voted</h2>
+      <div class="panel insights-panel" data-insights="${esc(t.id)}">
+        <div class="insights-locked">
+          <span class="lock-badge">🔒 Premium</span>
+          <p class="lock-title">See who's voting</p>
+          <p class="lock-sub">Full breakdown by age, gender, country &amp; occupation — for Premium members.</p>
+        </div>
+      </div>
+    </section>
     ${tags.length ? `<div class="tags">${tags.map((h) => `<span>#${esc(h)}</span>`).join("")}</div>` : ""}
     <section class="analysis" style="--i:2">
       <h2 class="sec-h">Comments${t.commentCount ? " · " + fmt(t.commentCount) : ""}</h2>

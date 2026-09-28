@@ -334,24 +334,64 @@ router.patch("/admin/verify-requests/:id", async (req: any, res: any) => {
       .where(eq(verificationRequests.id, id));
 
     if (action === "approve") {
+      // The verified badge is FREE — approving it grants verification only, NOT
+      // premium. Premium (paid insights) is a separate flag granted via
+      // /admin/premium or a future checkout.
       await db
         .insert(users)
         .values({
           id: request.userId,
           email: request.userEmail,
-          isPremium: true,
           isVerified: true,
           voiceType: request.requestedVoiceType,
         })
         .onConflictDoUpdate({
           target: users.id,
-          set: { isPremium: true, isVerified: true, voiceType: request.requestedVoiceType },
+          set: { isVerified: true, voiceType: request.requestedVoiceType },
         });
     }
 
     res.json({ success: true, status: newStatus });
   } catch (err) {
     logger.error({ err }, "verify-requests PATCH error");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// POST /admin/premium — grant or revoke premium (paid insights) by email.
+// "Gate now, charge later": until a checkout exists, an admin flips premium on
+// for brands/creators manually. Premium is our own secure DB flag (users.isPremium),
+// never the client-editable Clerk metadata.
+router.post("/admin/premium", async (req: any, res: any) => {
+  try {
+    const adminUserId = await getAuthenticatedUserId(req);
+    if (!adminUserId) return res.status(401).json({ error: "Unauthorized" });
+    if (!(await checkIsAdmin(adminUserId))) return res.status(403).json({ error: "Forbidden" });
+
+    const { userEmail, action } = req.body;
+    if (!userEmail || typeof userEmail !== "string") {
+      return res.status(400).json({ error: "userEmail required" });
+    }
+    if (!["grant", "revoke"].includes(action)) {
+      return res.status(400).json({ error: "action must be 'grant' or 'revoke'" });
+    }
+
+    const clerkUsers = await clerk.users.getUserList({ emailAddress: [userEmail] });
+    if (!clerkUsers.data.length) {
+      return res.status(404).json({ error: "No user with that email — they must sign in at least once first" });
+    }
+    const targetId = clerkUsers.data[0].id;
+    const premium = action === "grant";
+
+    await db
+      .insert(users)
+      .values({ id: targetId, email: userEmail, isPremium: premium })
+      .onConflictDoUpdate({ target: users.id, set: { isPremium: premium } });
+
+    logger.info({ targetId, premium }, "admin premium toggled");
+    res.json({ success: true, isPremium: premium });
+  } catch (err) {
+    logger.error({ err }, "admin/premium error");
     res.status(500).json({ error: "Internal server error" });
   }
 });

@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { verifyToken } from "@clerk/backend";
 import { db } from "@workspace/db";
-import { topics, topicVotes, topicComments } from "@workspace/db/schema";
+import { topics, topicVotes, topicComments, users } from "@workspace/db/schema";
 import { eq, and, desc, inArray } from "drizzle-orm";
 import { randomUUID } from "crypto";
 import { logger } from "../lib/logger";
@@ -47,6 +47,25 @@ async function getVoterId(req: any): Promise<string | null> {
   return null;
 }
 
+// Premium (paid insights) is a secure server flag on our users table — never the
+// client-editable Clerk metadata. Only premium users receive the demographic
+// breakdown ("who voted"); everyone else gets an empty breakdown + an upsell.
+async function isPremiumUser(userId: string | null): Promise<boolean> {
+  if (!userId || userId.startsWith("anon_")) return false;
+  try {
+    const [u] = await db.select().from(users).where(eq(users.id, userId));
+    return !!u?.isPremium;
+  } catch {
+    return false;
+  }
+}
+
+// Strip the demographic breakdown from a topic row unless the viewer is premium.
+function gateInsights<T extends { demoBreakdown?: any }>(row: T, premium: boolean): T {
+  if (premium) return row;
+  return { ...row, demoBreakdown: {} };
+}
+
 // Port of applyDemoToBreakdown from the app's AppContext: add/remove one voter's
 // demographics from a topic's running breakdown.
 function applyDemo(breakdown: DemoBreakdown, demo: Demo | null | undefined, delta: 1 | -1): DemoBreakdown {
@@ -89,11 +108,15 @@ async function withComments(rows: any[]) {
   }));
 }
 
-// GET /topics — the shared feed (public: app + website both read).
-router.get("/topics", async (_req, res) => {
+// GET /topics — the shared feed (public: app + website both read). The
+// demographic breakdown is premium-only, so it's stripped for non-premium
+// viewers (including anonymous ones).
+router.get("/topics", async (req: any, res) => {
   try {
+    const premium = await isPremiumUser(await getUserId(req));
     const rows = await db.select().from(topics).orderBy(desc(topics.createdAt));
-    res.json({ topics: await withComments(rows) });
+    const list = await withComments(rows);
+    res.json({ topics: premium ? list : list.map((t) => gateInsights(t, false)) });
   } catch (err) {
     logger.error({ err }, "topics GET error");
     res.status(500).json({ error: "Internal server error" });
@@ -124,15 +147,32 @@ router.get("/topics/me/votes", async (req: any, res) => {
   }
 });
 
-// GET /topics/:id — a single topic (public).
-router.get("/topics/:id", async (req, res) => {
+// GET /topics/:id — a single topic (public). Breakdown gated to premium.
+router.get("/topics/:id", async (req: any, res) => {
   try {
+    const premium = await isPremiumUser(await getUserId(req));
     const [row] = await db.select().from(topics).where(eq(topics.id, req.params.id));
     if (!row) return res.status(404).json({ error: "Topic not found" });
     const [withC] = await withComments([row]);
-    res.json({ topic: withC });
+    res.json({ topic: gateInsights(withC, premium) });
   } catch (err) {
     logger.error({ err }, "topic GET error");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// GET /topics/:id/insights — the demographic breakdown, premium only. Used by
+// the website to unlock the "Who voted" panel for signed-in premium viewers.
+router.get("/topics/:id/insights", async (req: any, res) => {
+  try {
+    const userId = await getUserId(req);
+    if (!userId) return res.status(401).json({ error: "Unauthorized" });
+    if (!(await isPremiumUser(userId))) return res.status(403).json({ error: "Premium required" });
+    const [row] = await db.select().from(topics).where(eq(topics.id, req.params.id));
+    if (!row) return res.status(404).json({ error: "Topic not found" });
+    res.json({ demoBreakdown: row.demoBreakdown ?? {} });
+  } catch (err) {
+    logger.error({ err }, "topic insights GET error");
     res.status(500).json({ error: "Internal server error" });
   }
 });
