@@ -28,10 +28,40 @@ async function getAuthenticatedUserId(req: any): Promise<string | null> {
   }
 }
 
-// Check if a userId is an admin in the DB
+// App owner(s), always admin regardless of DB state. Override/extend via the
+// OWNER_EMAILS env var (comma-separated). Defaults to the founder's email so a
+// fresh/reset database never locks the owner out of the admin panel.
+const OWNER_EMAILS = (process.env.OWNER_EMAILS || "akshay21790@gmail.com")
+  .split(",")
+  .map((e) => e.trim().toLowerCase())
+  .filter(Boolean);
+
+// Check if a userId is an admin: recorded in the DB, or the app owner matched
+// by email. Owner matches self-heal by inserting the admins row so later checks
+// skip the Clerk lookup.
 async function checkIsAdmin(userId: string): Promise<boolean> {
   const rows = await db.select().from(admins).where(eq(admins.userId, userId));
-  return rows.length > 0;
+  if (rows.length > 0) return true;
+
+  if (OWNER_EMAILS.length === 0) return false;
+  try {
+    const user = await clerk.users.getUser(userId);
+    const email = (
+      user.primaryEmailAddress?.emailAddress ??
+      user.emailAddresses?.[0]?.emailAddress
+    )?.toLowerCase();
+    if (email && OWNER_EMAILS.includes(email)) {
+      try {
+        await db.insert(admins).values({ userId, userEmail: email });
+      } catch {
+        // ignore duplicate/race inserts — still an admin
+      }
+      return true;
+    }
+  } catch (err) {
+    logger.error({ err, userId }, "owner-email admin check failed");
+  }
+  return false;
 }
 
 // GET /admin/admins — list all admins (admin only)
