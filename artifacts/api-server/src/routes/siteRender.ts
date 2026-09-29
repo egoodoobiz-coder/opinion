@@ -545,6 +545,34 @@ function shell(o: ShellOptions): string {
   .author-lg .author-name { font-size: 16px; }
   .card-author { margin: 10px 0 12px; }
   .topic-author { margin: 16px 0 6px; }
+
+  /* create poll form */
+  .create-form { max-width: 680px; }
+  .cf-signedout { display: none; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 14px 18px; margin-bottom: 20px; font-size: 14px; color: var(--dim); }
+  .cf-signedout.show { display: flex; }
+  .cf-signin { font: inherit; font-weight: 600; cursor: pointer; background: linear-gradient(96deg, var(--accent), var(--primary)); color: #04121a; border: none; border-radius: 100px; padding: 8px 18px; }
+  .cf-fields { display: grid; gap: 18px; }
+  .cf-label { display: block; font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 14px; color: var(--fg); }
+  .cf-opt { color: var(--dim); font-weight: 400; }
+  .cf-title, .cf-desc, .cf-cat, .cf-tags, .cf-opt-input { width: 100%; margin-top: 8px; font: inherit; font-size: 15px; color: var(--fg); background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; box-sizing: border-box; }
+  .cf-desc { resize: vertical; }
+  .cf-title:focus, .cf-desc:focus, .cf-cat:focus, .cf-tags:focus, .cf-opt-input:focus { outline: none; border-color: var(--accent); }
+  .cf-types { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-top: 8px; }
+  .cf-type { text-align: left; cursor: pointer; font: inherit; background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; color: var(--fg); display: flex; flex-direction: column; gap: 2px; }
+  .cf-type b { font-family: 'Space Grotesk', sans-serif; font-size: 14px; }
+  .cf-type span { font-size: 12px; color: var(--dim); }
+  .cf-type.on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, var(--card)); }
+  .cf-opt-list { display: grid; gap: 8px; margin-top: 8px; }
+  .cf-opt-row { display: flex; gap: 8px; }
+  .cf-opt-row .cf-opt-input { margin-top: 0; }
+  .cf-opt-del { flex: none; cursor: pointer; font: inherit; background: transparent; border: 1px solid var(--border); color: var(--dim); border-radius: 10px; padding: 0 13px; }
+  .cf-add { margin-top: 10px; cursor: pointer; font: inherit; font-weight: 600; font-size: 13px; background: transparent; border: 1px dashed var(--border); color: var(--accent); border-radius: 10px; padding: 8px 14px; }
+  .cf-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .cf-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 6px; }
+  .cf-hint { font-size: 13px; color: var(--dim); }
+  .cf-submit { font: inherit; font-weight: 700; font-size: 15px; cursor: pointer; background: linear-gradient(96deg, var(--accent), var(--primary)); color: #04121a; border: none; border-radius: 100px; padding: 12px 26px; }
+  .cf-submit:disabled { opacity: .5; cursor: not-allowed; }
+  @media (max-width: 560px) { .cf-row { grid-template-columns: 1fr; } }
   .live-dot { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 700; color: var(--accent); letter-spacing: .4px; }
   .live-dot i { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 8px var(--accent); animation: pulse 2.4s ease-in-out infinite; }
   @keyframes pulse { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: .3; transform: scale(.75); } }
@@ -912,6 +940,7 @@ function shell(o: ShellOptions): string {
       <span class="live-dot"><i></i>LIVE</span>
       <a href="/"${resultsOn ? ' class="on"' : ""}>Results</a>
       <a href="/insights"${insightsOn ? ' class="on"' : ""}>Insights</a>
+      <a href="/create"${o.path === "/create" ? ' class="on"' : ""}>Create</a>
       <span id="authslot" class="authslot"></span>
       <a href="${PLAY_URL}" class="nav-cta hide-sm">Get the app</a>
     </nav>
@@ -1287,11 +1316,112 @@ function shell(o: ShellOptions): string {
       .catch(function () {});
   }
 
+  // ---- create a poll ----
+  var createVT = "yesno";
+  function createNeedsOptions() { return createVT === "ranking" || createVT === "aspects"; }
+  function setCreateHint(m) { var h = document.querySelector(".cf-hint"); if (h) h.textContent = m || ""; }
+  function updateCreateAuth() { var so = document.querySelector(".cf-signedout"); if (so) so.classList.toggle("show", !signedIn()); }
+  function addOptRow(val) {
+    var list = document.querySelector(".cf-opt-list");
+    if (!list || list.children.length >= 8) return;
+    var row = document.createElement("div");
+    row.className = "cf-opt-row";
+    var inp = document.createElement("input");
+    inp.className = "cf-opt-input"; inp.type = "text"; inp.maxLength = 60;
+    inp.placeholder = "Option " + (list.children.length + 1);
+    if (val) inp.value = val;
+    var del = document.createElement("button");
+    del.type = "button"; del.className = "cf-opt-del"; del.textContent = "✕";
+    row.appendChild(inp); row.appendChild(del); list.appendChild(row);
+  }
+  function syncCreateType() {
+    var wrap = document.querySelector(".cf-optionwrap");
+    if (wrap) wrap.hidden = !createNeedsOptions();
+    if (createNeedsOptions()) {
+      var list = document.querySelector(".cf-opt-list");
+      if (list && list.children.length === 0) { addOptRow(); addOptRow(); }
+    }
+  }
+  function submitCreate() {
+    var form = document.querySelector(".create-form");
+    if (!form) return;
+    if (!signedIn()) { updateCreateAuth(); goSignIn(); return; }
+    var title = (form.querySelector(".cf-title").value || "").trim();
+    if (!title) { setCreateHint("Add your question first."); return; }
+    var body = {
+      title: title,
+      description: (form.querySelector(".cf-desc").value || "").trim(),
+      category: form.querySelector(".cf-cat").value,
+      votingType: createVT,
+    };
+    if (createNeedsOptions()) {
+      var inputs = form.querySelectorAll(".cf-opt-input");
+      var opts = [];
+      for (var i = 0; i < inputs.length; i++) { var v = (inputs[i].value || "").trim(); if (v) opts.push(v); }
+      if (opts.length < 2) { setCreateHint("Add at least 2 options."); return; }
+      if (createVT === "ranking") {
+        body.rankingOptions = opts.map(function (o) {
+          var id = o.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40);
+          return { id: id || ("opt" + Math.random().toString(36).slice(2, 7)), label: o };
+        });
+      } else { body.aspects = opts; }
+    }
+    var tags = (form.querySelector(".cf-tags").value || "").split(/[,\\s]+/)
+      .map(function (s) { return s.replace(/^#/, "").trim(); }).filter(Boolean).slice(0, 10);
+    if (tags.length) body.hashtags = tags;
+    if (window.Clerk && window.Clerk.user) {
+      var u = window.Clerk.user;
+      body.createdByName = u.fullName || u.firstName || (u.primaryEmailAddress && u.primaryEmailAddress.emailAddress) || "Someone";
+    }
+    var btn = form.querySelector(".cf-submit"); if (btn) btn.disabled = true;
+    setCreateHint("Publishing…");
+    authHeaders({ "Content-Type": "application/json" }).then(function (h) {
+      return fetch("/api/topics", { method: "POST", headers: h, body: JSON.stringify(body) });
+    }).then(function (r) {
+      if (r.status === 401) throw new Error("unauth");
+      if (!r.ok) throw new Error("failed");
+      return r.json();
+    }).then(function (d) {
+      window.location.href = (d && d.topic && d.topic.id) ? ("/topic/" + d.topic.id) : "/";
+    }).catch(function (err) {
+      if (btn) btn.disabled = false;
+      if (err && err.message === "unauth") { updateCreateAuth(); goSignIn(); }
+      else setCreateHint("Couldn't publish — please try again.");
+    });
+  }
+  function initCreate() {
+    var form = document.querySelector(".create-form");
+    if (!form) return;
+    form.addEventListener("click", function (e) {
+      var t = e.target;
+      function c(sel) { return t && t.closest ? t.closest(sel) : null; }
+      var typeBtn = c(".cf-type");
+      if (typeBtn) {
+        createVT = typeBtn.getAttribute("data-vt");
+        var all = form.querySelectorAll(".cf-type");
+        for (var i = 0; i < all.length; i++) all[i].classList.toggle("on", all[i] === typeBtn);
+        syncCreateType();
+        return;
+      }
+      if (c(".cf-add")) { addOptRow(); return; }
+      if (c(".cf-opt-del")) {
+        var list = document.querySelector(".cf-opt-list");
+        if (list && list.children.length > 2) { var row = c(".cf-opt-row"); if (row) row.remove(); }
+        return;
+      }
+      if (c(".cf-signin")) { goSignIn(); return; }
+      if (c(".cf-submit")) { submitCreate(); return; }
+    });
+    syncCreateType();
+    updateCreateAuth();
+  }
+
   function initClerk() {
     window.Clerk.load().then(function () {
       renderAuth();
       markMyVotes();
       loadInsights();
+      updateCreateAuth();
       // Just came back from the hosted sign-in with a queued vote? Cast it now.
       if (signedIn()) {
         var p = loadPending();
@@ -1299,7 +1429,7 @@ function shell(o: ShellOptions): string {
         var draft = loadCommentDraft();
         if (draft) { var ci = document.querySelector(".comment-input"); if (ci) ci.value = draft; clearCommentDraft(); }
       }
-      window.Clerk.addListener(function () { renderAuth(); markMyVotes(); loadInsights(); });
+      window.Clerk.addListener(function () { renderAuth(); markMyVotes(); loadInsights(); updateCreateAuth(); });
     }).catch(function () {});
   }
   var clerkTries = 0;
@@ -1308,6 +1438,8 @@ function shell(o: ShellOptions): string {
     if (window.Clerk && window.Clerk.load) { clearInterval(clerkWait); initClerk(); }
     else if (clerkTries > 100) { clearInterval(clerkWait); }
   }, 200);
+
+  initCreate();
 
   setInterval(function () {
     if (document.hidden) return;
@@ -1407,6 +1539,66 @@ export function renderTopicPage(t: SiteTopic, comments: SiteComment[]): string {
         <span>${TYPE_LABEL[t.votingType] ?? t.votingType}</span>
         <span>${formatDate(t.createdAt)}</span>
       </div>`,
+    body,
+  });
+}
+
+export function renderCreatePage(): string {
+  const cats = Object.entries(CATEGORY_CONFIG)
+    .map(([k, v]) => `<option value="${k}">${esc(v.label)}</option>`)
+    .join("");
+  const types: [string, string, string][] = [
+    ["yesno", "Yes / No", "A for-or-against question."],
+    ["rating", "Rating", "People rate it 1–5."],
+    ["ranking", "Ranking", "People order the options."],
+    ["aspects", "Aspects", "Thumbs up/down each aspect."],
+  ];
+  const typeBtns = types
+    .map(([v, label, desc], i) =>
+      `<button type="button" class="cf-type${i === 0 ? " on" : ""}" data-vt="${v}"><b>${esc(label)}</b><span>${esc(desc)}</span></button>`,
+    )
+    .join("");
+
+  const body = `
+    <form class="create-form" autocomplete="off">
+      <div class="cf-signedout">Sign in to publish your poll.<button type="button" class="cf-signin">Sign in</button></div>
+      <div class="cf-fields">
+        <label class="cf-label">Your question
+          <input class="cf-title" type="text" maxlength="120" placeholder="e.g. Is Virat Kohli the GOAT?">
+        </label>
+        <label class="cf-label">Description <span class="cf-opt">(optional)</span>
+          <textarea class="cf-desc" maxlength="500" rows="3" placeholder="Add context to spark the debate…"></textarea>
+        </label>
+        <div class="cf-label">Poll type
+          <div class="cf-types">${typeBtns}</div>
+        </div>
+        <div class="cf-optionwrap" hidden>
+          <div class="cf-label">Options <span class="cf-opt">(2–8)</span></div>
+          <div class="cf-opt-list"></div>
+          <button type="button" class="cf-add">+ Add option</button>
+        </div>
+        <div class="cf-row">
+          <label class="cf-label">Category
+            <select class="cf-cat">${cats}</select>
+          </label>
+          <label class="cf-label">Hashtags <span class="cf-opt">(optional)</span>
+            <input class="cf-tags" type="text" placeholder="cricket, kohli">
+          </label>
+        </div>
+        <div class="cf-actions">
+          <span class="cf-hint"></span>
+          <button type="button" class="cf-submit">Publish poll</button>
+        </div>
+      </div>
+    </form>`;
+
+  return shell({
+    title: "Create a poll — Opinion",
+    description: "Start a debate on Opinion — ask a question and watch the world vote.",
+    path: "/create",
+    heroClass: "hero-create",
+    hero: `<h1 class="topic-h1">Create a poll</h1>
+      <p class="topic-desc">Ask a question, choose how people vote, and share it. The world votes.</p>`,
     body,
   });
 }

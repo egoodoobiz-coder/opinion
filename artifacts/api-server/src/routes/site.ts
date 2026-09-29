@@ -7,6 +7,7 @@ import {
   renderPage,
   renderInsightsPage,
   renderTopicPage,
+  renderCreatePage,
   renderNotFound,
   type SiteTopic,
   type SiteComment,
@@ -136,6 +137,7 @@ function page(key: string, render: (list: SiteTopic[]) => string) {
 
 router.get("/", page("home", renderPage));
 router.get("/insights", page("insights", renderInsightsPage));
+router.get("/create", (_req, res) => res.type("html").send(renderCreatePage()));
 
 router.get("/topic/:id", async (req: any, res: any) => {
   const id = String(req.params.id);

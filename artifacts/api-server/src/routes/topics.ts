@@ -224,6 +224,11 @@ router.post("/topics", async (req: any, res) => {
       for (const a of aspects) aspectVotes[a] = { up: 0, down: 0 };
     }
 
+    // The verified-badge type is derived from the author's real account, never
+    // trusted from the request body (which a web client could forge).
+    const [author] = await db.select().from(users).where(eq(users.id, userId));
+    const voiceType = author?.isVerified ? (author.voiceType ?? null) : null;
+
     const [row] = await db
       .insert(topics)
       .values({
@@ -238,8 +243,8 @@ router.post("/topics", async (req: any, res) => {
         linkUrl: typeof b.linkUrl === "string" && b.linkUrl ? b.linkUrl : null,
         targetDemographics: b.targetDemographics ?? null,
         createdBy: userId,
-        createdByName: typeof b.createdByName === "string" ? b.createdByName : null,
-        voiceType: typeof b.voiceType === "string" ? b.voiceType : null,
+        createdByName: typeof b.createdByName === "string" ? b.createdByName.slice(0, 80) : null,
+        voiceType,
         aspectVotes,
       })
       .returning();
