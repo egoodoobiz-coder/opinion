@@ -94,6 +94,7 @@ export interface SiteTopic {
   aspects: string[] | null;
   hashtags: string[] | null;
   createdByName: string | null;
+  voiceType: string | null;
   createdAt: number;
   yesCount: number;
   noCount: number;
@@ -300,6 +301,24 @@ function renderVoteWidget(t: SiteTopic): string {
   </div>`;
 }
 
+const VOICE_LABELS: Record<string, string> = {
+  expert: "Expert", brand: "Brand", public: "Public figure", creator: "Creator",
+};
+
+// Twitter-style author chip: circular avatar (initial) + name + verified check.
+// voiceType is set on topics created by a verified account.
+function renderAuthor(name: string | null, voiceType: string | null, size: "sm" | "lg" = "sm"): string {
+  const display = (name ?? "Opinion").trim() || "Opinion";
+  const initial = display.charAt(0).toUpperCase();
+  const check = voiceType
+    ? `<span class="author-check" title="${esc(VOICE_LABELS[voiceType] ?? "Verified")}">&#10003;</span>`
+    : "";
+  return `<span class="author author-${size}">` +
+    `<span class="author-av">${esc(initial)}</span>` +
+    `<span class="author-name">${esc(display)}${check}</span>` +
+    `</span>`;
+}
+
 function renderCard(t: SiteTopic, index: number, featured = false): string {
   const cat = CATEGORY_CONFIG[t.category] ?? CATEGORY_CONFIG.other;
   const viz = vizFor(t);
@@ -318,6 +337,7 @@ function renderCard(t: SiteTopic, index: number, featured = false): string {
       <span class="type">${esc(TYPE_LABEL[t.votingType] ?? t.votingType)}</span>
       ${kicker}
     </header>`;
+  const authorLine = `<div class="card-author">${renderAuthor(t.createdByName, t.voiceType, "sm")}</div>`;
   const title = `<h3>${esc(t.title)}</h3>`;
   const desc = t.description ? `<p class="desc">${esc(t.description)}</p>` : "";
   const foot = `<footer class="card-foot">
@@ -329,11 +349,11 @@ function renderCard(t: SiteTopic, index: number, featured = false): string {
 
   if (featured) {
     return `<a class="card feature" ${attrs}>
-      <div class="card-main">${head}${title}${desc}${foot}</div>
+      <div class="card-main">${head}${authorLine}${title}${desc}${foot}</div>
       <div class="card-viz">${viz}</div>
     </a>`;
   }
-  return `<a class="card" ${attrs}>${head}${title}${desc}<div class="viz">${viz}</div>${foot}</a>`;
+  return `<a class="card" ${attrs}>${head}${authorLine}${title}${desc}<div class="viz">${viz}</div>${foot}</a>`;
 }
 
 function renderLive(list: SiteTopic[]): string {
@@ -503,6 +523,28 @@ function shell(o: ShellOptions): string {
   .pc-stat span { font-size: 10.5px; color: var(--dim); text-transform: uppercase; letter-spacing: .4px; }
   .pc-signout { width: 100%; font: inherit; font-weight: 600; font-size: 14px; cursor: pointer; background: transparent; color: var(--fg); border: 1px solid var(--border); border-radius: 100px; padding: 9px; }
   .pc-signout:hover { border-color: var(--dim); }
+
+  /* author chip (Twitter-style) */
+  .author { display: inline-flex; align-items: center; gap: 9px; min-width: 0; }
+  .author-av {
+    flex: none; display: inline-flex; align-items: center; justify-content: center;
+    width: 28px; height: 28px; border-radius: 50%; font-weight: 800; font-size: 13px;
+    color: #04121a; background: linear-gradient(150deg, var(--accent), var(--accent2));
+  }
+  .author-name {
+    display: inline-flex; align-items: center; gap: 5px; min-width: 0;
+    font-size: 13.5px; font-weight: 600; color: var(--fg);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .author-check {
+    flex: none; display: inline-flex; align-items: center; justify-content: center;
+    width: 16px; height: 16px; border-radius: 50%; font-size: 10px; font-weight: 900;
+    color: #04121a; background: var(--accent);
+  }
+  .author-lg .author-av { width: 44px; height: 44px; font-size: 19px; }
+  .author-lg .author-name { font-size: 16px; }
+  .card-author { margin: 10px 0 12px; }
+  .topic-author { margin: 16px 0 6px; }
   .live-dot { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 700; color: var(--accent); letter-spacing: .4px; }
   .live-dot i { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 8px var(--accent); animation: pulse 2.4s ease-in-out infinite; }
   @keyframes pulse { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: .3; transform: scale(.75); } }
@@ -1359,11 +1401,11 @@ export function renderTopicPage(t: SiteTopic, comments: SiteComment[]): string {
       <div><span class="cat cat-lg" style="--c:${cat.color}"><i></i>${esc(cat.label)}</span></div>
       <h1 class="topic-h1">${esc(t.title)}</h1>
       ${t.description ? `<p class="topic-desc">${esc(t.description)}</p>` : ""}
+      <div class="topic-author">${renderAuthor(author, t.voiceType, "lg")}</div>
       <div class="topic-meta">
         <span>${fmt(part)} ${part === 1 ? "vote" : "votes"}</span>
         <span>${TYPE_LABEL[t.votingType] ?? t.votingType}</span>
         <span>${formatDate(t.createdAt)}</span>
-        <span>by ${esc(author)}</span>
       </div>`,
     body,
   });

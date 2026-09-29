@@ -48,6 +48,7 @@ function mapRow(r: any, commentCount: number, latestComment: SiteTopic["latestCo
     aspects: (r.aspects as string[]) ?? null,
     hashtags: (r.hashtags as string[]) ?? null,
     createdByName: r.createdByName ?? null,
+    voiceType: r.voiceType ?? null,
     createdAt: r.createdAt ? new Date(r.createdAt).getTime() : Date.now(),
     yesCount: r.yesCount ?? 0,
     noCount: r.noCount ?? 0,
