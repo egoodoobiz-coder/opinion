@@ -79,6 +79,17 @@ app.use(
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Rebrand: permanently redirect the old askopinion.app website to factinion.com.
+// We skip /api so the already-shipped v5 app (which still calls askopinion.app/api)
+// keeps working — only human-facing pages are redirected.
+app.use((req, res, next) => {
+  const host = (req.headers.host || "").split(":")[0].toLowerCase();
+  if ((host === "askopinion.app" || host === "www.askopinion.app") && !req.path.startsWith("/api")) {
+    return res.redirect(301, "https://factinion.com" + req.originalUrl);
+  }
+  next();
+});
+
 app.use("/api", router);
 app.use(privacyRouter);
 app.use(deleteAccountRouter);
