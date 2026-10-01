@@ -1004,12 +1004,10 @@ function shell(o: ShellOptions): string {
 <header class="top">
   <div class="wrap">
     <a class="brand" href="/">
-      <svg width="26" height="26" viewBox="0 0 100 100" aria-hidden="true">
-        <circle cx="50" cy="50" r="46" fill="#0f1524" stroke="#1e2740"/>
-        <path d="M50 8 A42 42 0 0 1 50 92 A21 21 0 0 1 50 50 A21 21 0 0 0 50 8 Z" fill="${C.yes}"/>
-        <path d="M50 8 A42 42 0 0 0 50 92 A21 21 0 0 0 50 50 A21 21 0 0 1 50 8 Z" fill="${C.no}"/>
-        <circle cx="50" cy="29" r="8" fill="#070a14"/>
-        <circle cx="50" cy="71" r="8" fill="#070a14"/>
+      <svg width="30" height="30" viewBox="0 0 200 200" aria-hidden="true">
+        <path d="M56 50 h88 a16 16 0 0 1 16 16 v54 a16 16 0 0 1 -16 16 h-46 l-28 26 v-26 h-14 a16 16 0 0 1 -16 -16 v-54 a16 16 0 0 1 16 -16 z" fill="none" stroke="${C.accent}" stroke-width="10" stroke-linejoin="round"/>
+        <rect x="74" y="66" width="56" height="17" rx="5" fill="${C.yes}"/>
+        <rect x="74" y="93" width="40" height="17" rx="5" fill="${C.no}"/>
       </svg>
       Factinion
     </a>
