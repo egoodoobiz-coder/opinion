@@ -21,11 +21,9 @@ const router: IRouter = Router();
 const cache: Record<string, { at: number; html: string }> = {};
 const CACHE_MS = 15000;
 
-// Website campaign focus: the public homepage/insights show ONLY these topic ids
-// so the poll we're actively promoting isn't buried under the others. Set the
-// SITE_FEATURED_TOPIC_IDS env (comma-separated) to swap which poll is featured,
-// or "all" to show everything. The app feed (/api/topics) and direct
-// /topic/:id links are unaffected — every poll stays reachable.
+// The polls to surface in the homepage "LIVE" section (actively promoted). Other
+// polls appear below under "Other opinions". Set SITE_FEATURED_TOPIC_IDS
+// (comma-separated) to change which are featured, or "all" for a single feed.
 const FEATURED_TOPIC_IDS = (
   process.env.SITE_FEATURED_TOPIC_IDS ??
   "4108e5c0-dea3-41e4-9923-106b70d2484d,073a404c-adad-47b6-88ad-03cb8e3c48ef"
@@ -66,8 +64,14 @@ function mapRow(r: any, commentCount: number, latestComment: SiteTopic["latestCo
   };
 }
 
+// Leftover demo/seed topics (createdBy "system") carry fake vote counts, so they
+// never show on the public site.
+function isHidden(r: any): boolean {
+  return r.createdBy === "system";
+}
+
 async function loadTopics(): Promise<SiteTopic[]> {
-  const rows = await db.select().from(topics).orderBy(desc(topics.createdAt));
+  const rows = (await db.select().from(topics).orderBy(desc(topics.createdAt))).filter((r: any) => !isHidden(r));
   if (rows.length === 0) return [];
 
   const ids = rows.map((r: any) => r.id);
@@ -83,19 +87,14 @@ async function loadTopics(): Promise<SiteTopic[]> {
     }
   }
 
-  const list = (rows as any[]).map((r) =>
+  return (rows as any[]).map((r) =>
     mapRow(r, counts[r.id] ?? 0, latest[r.id] ? { authorName: latest[r.id].authorName, text: latest[r.id].text } : null),
   );
-
-  if (!FEATURE_ALL) {
-    const wanted = new Set(FEATURED_TOPIC_IDS);
-    const only = list.filter((t) => wanted.has(t.id));
-    // Fall back to the full list if the featured ids matched nothing, so the
-    // homepage is never accidentally blank.
-    if (only.length) return only;
-  }
-  return list;
 }
+
+// The ids to surface in the homepage "LIVE" section (the polls being promoted).
+// Empty / "all" → no special LIVE section, just one feed.
+const LIVE_IDS = FEATURE_ALL ? [] : FEATURED_TOPIC_IDS;
 
 async function loadTopic(id: string): Promise<{ topic: SiteTopic; comments: SiteComment[] } | null> {
   const rows = await db.select().from(topics).where(eq(topics.id, id)).limit(1);
@@ -118,10 +117,13 @@ async function loadTopic(id: string): Promise<{ topic: SiteTopic; comments: Site
 }
 
 function page(key: string, render: (list: SiteTopic[]) => string) {
-  return async (_req: any, res: any) => {
+  return async (req: any, res: any) => {
     try {
+      // `?fresh=` (used by the client right after a vote) bypasses the cache so
+      // the new result shows immediately instead of up to CACHE_MS later.
+      const fresh = req.query && req.query.fresh;
       const hit = cache[key];
-      if (hit && Date.now() - hit.at < CACHE_MS) {
+      if (!fresh && hit && Date.now() - hit.at < CACHE_MS) {
         return res.type("html").send(hit.html);
       }
       const html = render(await loadTopics());
@@ -136,7 +138,7 @@ function page(key: string, render: (list: SiteTopic[]) => string) {
   };
 }
 
-router.get("/", page("home", renderPage));
+router.get("/", page("home", (list) => renderPage(list, LIVE_IDS)));
 router.get("/insights", page("insights", renderInsightsPage));
 router.get("/create", (_req, res) => res.type("html").send(renderCreatePage()));
 
@@ -144,8 +146,9 @@ router.get("/topic/:id", async (req: any, res: any) => {
   const id = String(req.params.id);
   const key = `topic:${id}`;
   try {
+    const fresh = req.query && req.query.fresh;
     const hit = cache[key];
-    if (hit && Date.now() - hit.at < CACHE_MS) {
+    if (!fresh && hit && Date.now() - hit.at < CACHE_MS) {
       return res.type("html").send(hit.html);
     }
     const data = await loadTopic(id);

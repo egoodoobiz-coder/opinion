@@ -400,7 +400,7 @@ function renderCard(t: SiteTopic, index: number, featured = false): string {
   return `<a class="card" ${attrs}>${head}${authorLine}${title}${desc}<div class="viz">${viz}</div>${foot}</a>`;
 }
 
-function renderLive(list: SiteTopic[]): string {
+function renderLive(list: SiteTopic[], featuredIds: string[] = []): string {
   const totalVotes = list.reduce((sum, t) => sum + participation(t), 0);
   const totalComments = list.reduce((sum, t) => sum + t.commentCount, 0);
   const yesno = list.filter((t) => t.votingType === "yesno");
@@ -425,29 +425,37 @@ function renderLive(list: SiteTopic[]): string {
           ${bar(consensus, C.yes, C.no, 12)}
         </div>`;
 
-  // Feature the busiest question as the lead story once the feed is deep enough.
-  let featured: SiteTopic | null = null;
-  let rest = list;
-  if (list.length >= 3) {
-    featured = [...list].sort((a, b) => participation(b) - participation(a))[0];
-    rest = list.filter((t) => t.id !== featured!.id);
+  // Split into the promoted "LIVE" polls and everything else ("Other opinions").
+  const fset = new Set(featuredIds);
+  const live = featuredIds.map((id) => list.find((t) => t.id === id)).filter(Boolean) as SiteTopic[];
+  const others = list.filter((t) => !fset.has(t.id));
+
+  let body: string;
+  if (live.length) {
+    const liveCards =
+      renderCard(live[0], 0, true) + live.slice(1).map((t, i) => renderCard(t, i + 1)).join("");
+    const liveSection = `<div class="section-head section-live"><span class="live-dot"><i></i></span>Live now</div>
+      <div class="grid">${liveCards}</div>`;
+    const othersSection = others.length
+      ? `<div class="section-head">Other opinions</div>
+         <div class="grid">${others.map((t, i) => renderCard(t, i)).join("")}</div>`
+      : "";
+    body = liveSection + othersSection;
+  } else {
+    // No promoted polls: one feed, busiest as the lead story when deep enough.
+    let featured: SiteTopic | null = null;
+    let rest = list;
+    if (list.length >= 3) {
+      featured = [...list].sort((a, b) => participation(b) - participation(a))[0];
+      rest = list.filter((t) => t.id !== featured!.id);
+    }
+    const cards = list.length
+      ? (featured ? renderCard(featured, 0, true) : "") + rest.map((t, i) => renderCard(t, i + 1)).join("")
+      : `<p class="novotes">No questions yet.</p>`;
+    body = `<div class="grid">${cards}</div>`;
   }
 
-  const cards = list.length
-    ? (featured ? renderCard(featured, 0, true) : "") +
-      rest.map((t, i) => renderCard(t, i + 1)).join("")
-    : `<p class="novotes">No questions yet.</p>`;
-
-  const cats = Array.from(new Set(list.map((t) => t.category)));
-  const chips = [
-    `<button class="chip on" data-cat="all" type="button">All</button>`,
-    ...cats.map((c) => {
-      const cfg = CATEGORY_CONFIG[c] ?? CATEGORY_CONFIG.other;
-      return `<button class="chip" data-cat="${esc(c)}" type="button" style="--c:${cfg.color}">${esc(cfg.label)}</button>`;
-    }),
-  ].join("");
-
-  return `${stats}${meter}${list.length > 1 ? `<div class="chips">${chips}</div>` : ""}<div class="grid">${cards}</div>`;
+  return `${stats}${meter}${body}`;
 }
 
 interface ShellOptions {
@@ -589,6 +597,11 @@ function shell(o: ShellOptions): string {
   .author-lg .author-name { font-size: 16px; }
   .card-author { margin: 10px 0 12px; }
   .topic-author { margin: 16px 0 6px; }
+
+  /* homepage sections */
+  .section-head { display: flex; align-items: center; gap: 9px; margin: 34px 0 16px; font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 20px; letter-spacing: -.3px; color: var(--fg); }
+  .section-head:first-child { margin-top: 6px; }
+  .section-live { color: var(--accent); text-transform: uppercase; letter-spacing: 1.5px; font-size: 16px; }
 
   /* create poll form */
   .create-form { max-width: 680px; }
@@ -1199,7 +1212,9 @@ function shell(o: ShellOptions): string {
   }
 
   function refreshLive(cb) {
-    fetch(document.body.getAttribute("data-refresh") || "/", { headers: { accept: "text/html" } })
+    var base = document.body.getAttribute("data-refresh") || "/";
+    var url = base + (base.indexOf("?") > -1 ? "&" : "?") + "fresh=" + Date.now();
+    fetch(url, { headers: { accept: "text/html" } })
       .then(function (r) { return r.text(); })
       .then(function (html) {
         var doc = new DOMParser().parseFromString(html, "text/html");
@@ -1221,7 +1236,30 @@ function shell(o: ShellOptions): string {
     doVote(topicId, body);
   }
 
+  // Optimistically highlight the tapped control so the vote feels instant,
+  // before the server round-trip + results refresh complete.
+  function markChosen(body) {
+    var panel = document.querySelector(".vote-panel");
+    if (!panel) return;
+    function clear(sel) { var e = panel.querySelectorAll(sel); for (var i = 0; i < e.length; i++) e[i].classList.remove("chosen"); }
+    if (body.kind === "yesno") {
+      clear(".vbtn");
+      var b = panel.querySelector('.vbtn[data-value="' + body.value + '"]'); if (b) b.classList.add("chosen");
+    } else if (body.kind === "choice") {
+      clear(".cbtn");
+      var c = panel.querySelector('.cbtn[data-opt="' + String(body.value).replace(/"/g, '\\\\"') + '"]'); if (c) c.classList.add("chosen");
+    } else if (body.kind === "rating") {
+      var stars = panel.querySelectorAll(".rbtn");
+      for (var i = 0; i < stars.length; i++) stars[i].classList.toggle("chosen", (i + 1) <= body.value);
+    } else if (body.kind === "aspect") {
+      var row = panel.querySelector('.abtn[data-aspect="' + String(body.aspect).replace(/"/g, '\\\\"') + '"]');
+      if (row && row.parentNode) { var sib = row.parentNode.querySelectorAll(".abtn"); for (var j = 0; j < sib.length; j++) sib[j].classList.remove("chosen"); }
+      var el = panel.querySelector('.abtn[data-aspect="' + String(body.aspect).replace(/"/g, '\\\\"') + '"][data-choice="' + body.choice + '"]'); if (el) el.classList.add("chosen");
+    }
+  }
+
   function doVote(topicId, body) {
+    markChosen(body);
     setStatus("Saving your vote…");
     authHeaders({ "Content-Type": "application/json" }).then(function (h) {
       return fetch("/api/topics/" + topicId + "/vote", { method: "POST", headers: h, body: JSON.stringify(body) });
@@ -1230,7 +1268,11 @@ function shell(o: ShellOptions): string {
         if (!r.ok) throw new Error("vote failed");
         return r.json();
       })
-      .then(function () { rankSel = []; refreshLive(function () { setStatus("✓ Your vote is in — thanks!"); }); })
+      .then(function () {
+        rankSel = [];
+        setStatus("✓ Your vote is in — thanks!"); // instant confirmation
+        refreshLive();                             // numbers catch up in the background
+      })
       .catch(function () { setStatus("Couldn't save your vote. Please try again."); });
   }
 
@@ -1515,7 +1557,7 @@ function shell(o: ShellOptions): string {
 </html>`;
 }
 
-export function renderPage(list: SiteTopic[]): string {
+export function renderPage(list: SiteTopic[], featuredIds: string[] = []): string {
   return shell({
     title: "Opinion — what people actually think",
     description: "Live results from the Opinion app: real polls, ratings and rankings, updating as people vote.",
@@ -1527,7 +1569,7 @@ export function renderPage(list: SiteTopic[]): string {
         <a class="cta cta-primary" href="${PLAY_URL}">Get it on Google Play</a>
         <a class="cta cta-ghost" href="/insights">Explore the data</a>
       </div>`,
-    body: renderLive(list),
+    body: renderLive(list, featuredIds),
   });
 }
 
