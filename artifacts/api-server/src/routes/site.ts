@@ -3,6 +3,7 @@ import { db } from "@workspace/db";
 import { topics, topicComments } from "@workspace/db/schema";
 import { desc, inArray, eq } from "drizzle-orm";
 import { logger } from "../lib/logger";
+import { OG_PNG_BASE64 } from "../ogImage";
 import {
   renderPage,
   renderInsightsPage,
@@ -141,6 +142,14 @@ function page(key: string, render: (list: SiteTopic[]) => string) {
 router.get("/", page("home", (list) => renderPage(list, LIVE_IDS)));
 router.get("/insights", page("insights", renderInsightsPage));
 router.get("/create", (_req, res) => res.type("html").send(renderCreatePage()));
+
+// The branded link-preview image (Open Graph / Twitter), referenced by og:image.
+const OG_PNG = Buffer.from(OG_PNG_BASE64, "base64");
+router.get("/og.png", (_req, res) => {
+  res.set("Content-Type", "image/png");
+  res.set("Cache-Control", "public, max-age=86400");
+  res.send(OG_PNG);
+});
 
 router.get("/topic/:id", async (req: any, res: any) => {
   const id = String(req.params.id);
