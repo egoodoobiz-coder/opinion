@@ -27,7 +27,8 @@ const CACHE_MS = 15000;
 // or "all" to show everything. The app feed (/api/topics) and direct
 // /topic/:id links are unaffected — every poll stays reachable.
 const FEATURED_TOPIC_IDS = (
-  process.env.SITE_FEATURED_TOPIC_IDS ?? "073a404c-adad-47b6-88ad-03cb8e3c48ef"
+  process.env.SITE_FEATURED_TOPIC_IDS ??
+  "4108e5c0-dea3-41e4-9923-106b70d2484d,073a404c-adad-47b6-88ad-03cb8e3c48ef"
 )
   .split(",")
   .map((s) => s.trim())
