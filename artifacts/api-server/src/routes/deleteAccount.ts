@@ -67,7 +67,7 @@ router.post("/delete-account", async (req, res) => {
     logger.info({ email }, "Account deletion requested");
 
     res.type("html").send(
-      page("Request received", `<h1>Request received</h1><div class="ok">Your deletion request for <strong>${email.replace(/</g, "&lt;")}</strong> has been recorded. Your account and associated data will be deleted within 30 days, and you'll receive a confirmation email once complete.</div><p class="small"><a href="/">Back to askopinion.app</a></p>`)
+      page("Request received", `<h1>Request received</h1><div class="ok">Your deletion request for <strong>${email.replace(/</g, "&lt;")}</strong> has been recorded. Your account and associated data will be deleted within 30 days, and you'll receive a confirmation email once complete.</div><p class="small"><a href="/">Back to factinion.com</a></p>`)
     );
   } catch (err) {
     logger.error({ err }, "delete-account POST error");

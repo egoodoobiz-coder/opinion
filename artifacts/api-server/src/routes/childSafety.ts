@@ -77,7 +77,7 @@ const CHILD_SAFETY_HTML = `<!DOCTYPE html>
   <li><a href="/delete-account">Delete your account and data</a></li>
 </ul>
 
-<p style="margin-top:40px;color:#777;font-size:13px;">These standards are published at <strong>https://askopinion.app/child-safety</strong> and are not user-editable.</p>
+<p style="margin-top:40px;color:#777;font-size:13px;">These standards are published at <strong>https://factinion.com/child-safety</strong> and are not user-editable.</p>
 </body>
 </html>`;
 

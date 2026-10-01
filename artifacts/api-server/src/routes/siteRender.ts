@@ -22,12 +22,12 @@ const PLAY_URL = "https://play.google.com/store/apps/details?id=app.askopinion";
 
 // Web sign-in uses the same Clerk production instance as the app, so a person has
 // one identity across web and app. The publishable key is public by design; it
-// only works on askopinion.app (production keys refuse other origins).
-const CLERK_PK = "pk_live_Y2xlcmsuYXNrb3Bpbmlvbi5hcHAk";
-const CLERK_JS = "https://clerk.askopinion.app/npm/@clerk/clerk-js@latest/dist/clerk.browser.js";
+// only works on factinion.com (production keys refuse other origins).
+const CLERK_PK = "pk_live_Y2xlcmsuZmFjdGluaW9uLmNvbSQ";
+const CLERK_JS = "https://clerk.factinion.com/npm/@clerk/clerk-js@latest/dist/clerk.browser.js";
 // Clerk's hosted Account Portal sign-in — robust across browsers, unlike the
 // embedded modal. We redirect here and come back to the same page after sign-in.
-const ACCOUNTS_SIGNIN = "https://accounts.askopinion.app/sign-in";
+const ACCOUNTS_SIGNIN = "https://accounts.factinion.com/sign-in";
 
 const CATEGORY_CONFIG: Record<string, { label: string; color: string }> = {
   food: { label: "Food", color: "#f97316" },
@@ -352,7 +352,7 @@ const VOICE_LABELS: Record<string, string> = {
 // Twitter-style author chip: circular avatar (initial) + name + verified check.
 // voiceType is set on topics created by a verified account.
 function renderAuthor(name: string | null, voiceType: string | null, size: "sm" | "lg" = "sm"): string {
-  const display = (name ?? "Opinion").trim() || "Opinion";
+  const display = (name ?? "Factinion").trim() || "Factinion";
   const initial = display.charAt(0).toUpperCase();
   const check = voiceType
     ? `<span class="author-check" title="${esc(VOICE_LABELS[voiceType] ?? "Verified")}">&#10003;</span>`
@@ -481,7 +481,7 @@ function shell(o: ShellOptions): string {
 <meta property="og:title" content="${esc(o.title)}">
 <meta property="og:description" content="${esc(o.description)}">
 <meta property="og:type" content="website">
-<meta property="og:url" content="https://askopinion.app${esc(o.path)}">
+<meta property="og:url" content="https://factinion.com${esc(o.path)}">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='48' fill='%23070a14'/%3E%3Cpath d='M50 8 A42 42 0 0 1 50 92 A21 21 0 0 1 50 50 A21 21 0 0 0 50 8 Z' fill='%2300d68f'/%3E%3Cpath d='M50 8 A42 42 0 0 0 50 92 A21 21 0 0 0 50 50 A21 21 0 0 1 50 8 Z' fill='%23ff4d5e'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -1003,7 +1003,7 @@ function shell(o: ShellOptions): string {
         <circle cx="50" cy="29" r="8" fill="#070a14"/>
         <circle cx="50" cy="71" r="8" fill="#070a14"/>
       </svg>
-      Opinion
+      Factinion
     </a>
     <nav>
       <span class="live-dot"><i></i>LIVE</span>
@@ -1032,7 +1032,7 @@ function shell(o: ShellOptions): string {
     <a href="/child-safety">Child safety standards</a>
     <a href="/delete-account">Delete your account</a>
     <a href="mailto:akshay21790@gmail.com">Contact</a>
-    <span class="copy">Opinion — ask anything, vote on everything.</span>
+    <span class="copy">Factinion — ask anything, vote on everything.</span>
   </div>
 </footer>
 
@@ -1559,12 +1559,12 @@ function shell(o: ShellOptions): string {
 
 export function renderPage(list: SiteTopic[], featuredIds: string[] = []): string {
   return shell({
-    title: "Opinion — what people actually think",
-    description: "Live results from the Opinion app: real polls, ratings and rankings, updating as people vote.",
+    title: "Factinion — what people actually think",
+    description: "Live results from the Factinion app: real polls, ratings and rankings, updating as people vote.",
     path: "/",
     hero: `<span class="eyebrow"><span class="live-dot"><i></i></span>Live opinion, as it happens</span>
       <h1>See what the world <span class="grad">actually thinks</span></h1>
-      <p>Real questions. Real votes. Counted live as they come in — straight from the Opinion app. Tap any story to break down the data.</p>
+      <p>Real questions. Real votes. Counted live as they come in — straight from the Factinion app. Tap any story to break down the data.</p>
       <div class="cta-row">
         <a class="cta cta-primary" href="${PLAY_URL}">Get it on Google Play</a>
         <a class="cta cta-ghost" href="/insights">Explore the data</a>
@@ -1594,7 +1594,7 @@ function renderComments(comments: SiteComment[]): string {
 export function renderTopicPage(t: SiteTopic, comments: SiteComment[]): string {
   const cat = CATEGORY_CONFIG[t.category] ?? CATEGORY_CONFIG.other;
   const part = participation(t);
-  const author = t.createdByName ?? "Opinion";
+  const author = t.createdByName ?? "Factinion";
   const tags = (t.hashtags ?? []).slice(0, 6);
 
   const body = `
@@ -1625,13 +1625,13 @@ export function renderTopicPage(t: SiteTopic, comments: SiteComment[]): string {
       ${renderComments(comments)}
     </section>
     <div class="detail-cta">
-      <div><strong>Cast your vote</strong><span>Join in and see the results move — in the Opinion app.</span></div>
+      <div><strong>Cast your vote</strong><span>Join in and see the results move — in the Factinion app.</span></div>
       <a class="cta cta-primary" href="${PLAY_URL}">Get it on Google Play</a>
     </div>`;
 
   return shell({
-    title: `${t.title} — Opinion`,
-    description: t.description || `Live results for "${t.title}" on Opinion.`,
+    title: `${t.title} — Factinion`,
+    description: t.description || `Live results for "${t.title}" on Factinion.`,
     path: `/topic/${t.id}`,
     heroClass: "hero-topic",
     hero: `<a class="back" href="/">&larr; All results</a>
@@ -1699,8 +1699,8 @@ export function renderCreatePage(): string {
     </form>`;
 
   return shell({
-    title: "Create a poll — Opinion",
-    description: "Start a debate on Opinion — ask a question and watch the world vote.",
+    title: "Create a poll — Factinion",
+    description: "Start a debate on Factinion — ask a question and watch the world vote.",
     path: "/create",
     heroClass: "hero-create",
     hero: `<h1 class="topic-h1">Create a poll</h1>
@@ -1711,7 +1711,7 @@ export function renderCreatePage(): string {
 
 export function renderNotFound(): string {
   return shell({
-    title: "Not found — Opinion",
+    title: "Not found — Factinion",
     description: "That page could not be found.",
     path: "/",
     hero: `<h1>Not <span class="grad">found</span></h1>
@@ -1966,11 +1966,11 @@ export function renderInsightsPage(list: SiteTopic[]): string {
   </div>`;
 
   return shell({
-    title: "Opinion — insights",
-    description: "What the numbers say across every question on Opinion: consensus, divisions, and who is voting.",
+    title: "Factinion — insights",
+    description: "What the numbers say across every question on Factinion: consensus, divisions, and who is voting.",
     path: "/insights",
     hero: `<h1>The <span class="grad">bigger picture</span></h1>
-      <p>Every question on Opinion, read together — where people agree, where they split, and who is doing the voting.</p>`,
+      <p>Every question on Factinion, read together — where people agree, where they split, and who is doing the voting.</p>`,
     body: list.length
       ? stats + sections.join("")
       : `<p class="novotes">No questions yet — insights appear once people start voting.</p>`,

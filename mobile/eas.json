@@ -24,8 +24,8 @@
         "buildType": "app-bundle"
       },
       "env": {
-        "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY": "pk_live_Y2xlcmsuYXNrb3Bpbmlvbi5hcHAk",
-        "EXPO_PUBLIC_API_URL": "https://askopinion.app"
+        "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY": "pk_live_Y2xlcmsuZmFjdGluaW9uLmNvbSQ",
+        "EXPO_PUBLIC_API_URL": "https://factinion.com"
       }
     }
   },
