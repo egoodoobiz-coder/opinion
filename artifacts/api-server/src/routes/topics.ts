@@ -12,7 +12,7 @@ const CATEGORIES = [
   "food", "tech", "movies", "music", "sports", "politics",
   "gaming", "science", "lifestyle", "travel", "automobiles", "other",
 ];
-const VOTING_TYPES = ["yesno", "rating", "ranking", "aspects"];
+const VOTING_TYPES = ["yesno", "rating", "ranking", "aspects", "choice"];
 
 const MAX_TITLE = 120;
 const MAX_DESC = 500;
@@ -218,6 +218,11 @@ router.post("/topics", async (req: any, res) => {
       return res.status(400).json({ error: "Invalid description" });
     }
 
+    if (b.votingType === "choice" || b.votingType === "ranking") {
+      const opts = Array.isArray(b.rankingOptions) ? b.rankingOptions : [];
+      if (opts.length < 2) return res.status(400).json({ error: "This poll type needs at least 2 options" });
+    }
+
     const aspects = Array.isArray(b.aspects) ? b.aspects.slice(0, 10) : null;
     const aspectVotes: Record<string, { up: number; down: number }> = {};
     if (b.votingType === "aspects" && aspects) {
@@ -349,6 +354,22 @@ router.post("/topics/:id/vote", async (req: any, res) => {
         patch.aspectVotes = aspectVotes;
         patch.demoBreakdown = demo;
         votePatch.aspectChoices = nextChoices;
+      } else if (kind === "choice") {
+        // Single-select poll ("pick one of many"). Options live in rankingOptions;
+        // tallies are stored in rankingVotes as { optionId: count }; the voter's
+        // pick is stored in topicVotes.ranking as a single-element array [optionId].
+        const optId = typeof req.body.value === "string" ? req.body.value : null;
+        if (!optId) return { error: 400 as const };
+        const choiceVotes: Record<string, number> = { ...((topic.rankingVotes as any) ?? {}) };
+        const prevPick: string | null = Array.isArray(prev?.ranking) ? ((prev!.ranking as any)[0] ?? null) : null;
+        if (prevPick === optId) return { error: 400 as const }; // no-op: already their pick
+        if (prevPick && choiceVotes[prevPick]) choiceVotes[prevPick] = Math.max(0, choiceVotes[prevPick] - 1);
+        choiceVotes[optId] = (Number(choiceVotes[optId]) || 0) + 1;
+        let demo = (topic.demoBreakdown as DemoBreakdown) ?? {};
+        if (!prevPick && demoHasKeys(voterDemo)) demo = applyDemo(demo, voterDemo, 1);
+        patch.rankingVotes = choiceVotes as any;
+        patch.demoBreakdown = demo;
+        votePatch.ranking = [optId];
       } else {
         return { error: 400 as const };
       }

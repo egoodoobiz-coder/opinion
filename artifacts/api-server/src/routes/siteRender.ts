@@ -49,6 +49,7 @@ const TYPE_LABEL: Record<string, string> = {
   rating: "Rating",
   ranking: "Ranking",
   aspects: "Aspects",
+  choice: "Multiple choice",
 };
 
 // Everything below renders user-authored text, so nothing reaches the page
@@ -109,9 +110,20 @@ export interface SiteTopic {
 
 // How many people took part, counted only through the topic's own voting type —
 // the same counter the app reads for that type.
+// Single-select poll tallies share the rankingVotes column, stored as
+// { optionId: count } instead of ranking's { optionId: positions[] }.
+function choiceCounts(t: SiteTopic): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const [k, v] of Object.entries((t.rankingVotes as any) ?? {})) out[k] = Number(v) || 0;
+  return out;
+}
+
 function participation(t: SiteTopic): number {
   if (t.votingType === "yesno") return t.yesCount + t.noCount;
   if (t.votingType === "rating") return t.ratingCount;
+  if (t.votingType === "choice") {
+    return Object.values(choiceCounts(t)).reduce((a, b) => a + b, 0);
+  }
   if (t.votingType === "ranking") {
     return Math.max(0, ...Object.values(t.rankingVotes).map((v) => v.length));
   }
@@ -201,6 +213,29 @@ function renderAspects(t: SiteTopic): string {
   return `<ul class="aspects">${rows.join("")}</ul>`;
 }
 
+function renderChoice(t: SiteTopic): string {
+  const options = t.rankingOptions ?? [];
+  const counts = choiceCounts(t);
+  const total = Object.values(counts).reduce((a, b) => a + b, 0);
+  if (total === 0) return `<p class="novotes">No votes yet — be the first.</p>`;
+  const rows = options
+    .map((o) => ({ ...o, n: counts[o.id] ?? 0 }))
+    .sort((a, b) => b.n - a.n);
+  const top = rows[0]?.n ?? 0;
+  return `<ul class="choices">${rows
+    .map((o) => {
+      const pct = total > 0 ? Math.round((o.n / total) * 100) : 0;
+      const lead = o.n === top && o.n > 0;
+      return `<li class="choice-row${lead ? " choice-lead" : ""}">
+        <span class="choice-label">${esc(o.label)}</span>
+        ${bar(pct, lead ? C.accent : "#3a5f78", C.muted, 7)}
+        <span class="choice-pct">${pct}%</span>
+      </li>`;
+    })
+    .join("")}</ul>
+  <p class="hint">${fmt(total)} ${total === 1 ? "vote" : "votes"}</p>`;
+}
+
 function vizFor(t: SiteTopic): string {
   return t.votingType === "yesno"
     ? renderYesNo(t)
@@ -208,7 +243,9 @@ function vizFor(t: SiteTopic): string {
       ? renderRating(t)
       : t.votingType === "ranking"
         ? renderRanking(t)
-        : renderAspects(t);
+        : t.votingType === "choice"
+          ? renderChoice(t)
+          : renderAspects(t);
 }
 
 // Open demographic breakdown for a single topic (used on the analysis page).
@@ -275,6 +312,13 @@ function renderVoteWidget(t: SiteTopic): string {
         </span>
       </div>`,
         )
+        .join("")}
+    </div>`;
+  } else if (t.votingType === "choice") {
+    const opts = t.rankingOptions ?? [];
+    controls = `<div class="vote-controls choice-controls">
+      ${opts
+        .map((o) => `<button class="cbtn" data-opt="${esc(o.id)}" type="button">${esc(o.label)}</button>`)
         .join("")}
     </div>`;
   } else if (t.votingType === "ranking") {
@@ -778,6 +822,18 @@ function shell(o: ShellOptions): string {
   .rank-send { background: linear-gradient(96deg, var(--accent), var(--primary)); color: #04121a; border: none; }
   .rank-send:disabled { opacity: .45; cursor: not-allowed; }
 
+  /* single-select (multiple choice) */
+  .choice-controls { display: grid; gap: 10px; }
+  .cbtn { font: inherit; font-weight: 600; font-size: 15px; cursor: pointer; text-align: left; color: var(--fg); background: var(--muted); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; transition: border-color .15s, background .15s; }
+  .cbtn:hover { border-color: var(--dim); }
+  .cbtn.chosen { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, var(--muted)); color: var(--accent); }
+  .choices { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+  .choice-row { display: grid; grid-template-columns: 1fr 34px; align-items: center; gap: 4px 10px; }
+  .choice-label { font-size: 14px; font-weight: 500; color: var(--fg); grid-column: 1; }
+  .choice-row .track { grid-column: 1 / 2; }
+  .choice-pct { grid-column: 2; grid-row: 1 / 3; font-size: 13px; color: var(--dim); text-align: right; font-variant-numeric: tabular-nums; }
+  .choice-lead .choice-label { color: var(--accent); font-weight: 700; }
+
   .vote-status { font-size: 13px; color: var(--accent); font-weight: 600; }
   .vote-status:not(:empty) { margin-bottom: 12px; }
   .vote-results { margin-top: 6px; }
@@ -1119,6 +1175,10 @@ function shell(o: ShellOptions): string {
             if (el) el.classList.add("chosen");
           }
         }
+        if (v.ranking && v.ranking.length && panel.getAttribute("data-kind") === "choice") {
+          var cb = panel.querySelector('.cbtn[data-opt="' + String(v.ranking[0]).replace(/"/g, '\\\\"') + '"]');
+          if (cb) cb.classList.add("chosen");
+        }
       })
       .catch(function () {});
   }
@@ -1245,6 +1305,9 @@ function shell(o: ShellOptions): string {
     var abtn = closest(".abtn");
     if (abtn) { e.preventDefault(); castVote(topicId, { kind: "aspect", aspect: abtn.getAttribute("data-aspect"), choice: abtn.getAttribute("data-choice") }); return; }
 
+    var cbtn = closest(".cbtn");
+    if (cbtn) { e.preventDefault(); castVote(topicId, { kind: "choice", value: cbtn.getAttribute("data-opt") }); return; }
+
     var reset = closest(".rank-reset");
     if (reset) { e.preventDefault(); rankSel = []; updateRankUI(); return; }
 
@@ -1318,7 +1381,7 @@ function shell(o: ShellOptions): string {
 
   // ---- create a poll ----
   var createVT = "yesno";
-  function createNeedsOptions() { return createVT === "ranking" || createVT === "aspects"; }
+  function createNeedsOptions() { return createVT === "ranking" || createVT === "aspects" || createVT === "choice"; }
   function setCreateHint(m) { var h = document.querySelector(".cf-hint"); if (h) h.textContent = m || ""; }
   function updateCreateAuth() { var so = document.querySelector(".cf-signedout"); if (so) so.classList.toggle("show", !signedIn()); }
   function addOptRow(val) {
@@ -1359,7 +1422,7 @@ function shell(o: ShellOptions): string {
       var opts = [];
       for (var i = 0; i < inputs.length; i++) { var v = (inputs[i].value || "").trim(); if (v) opts.push(v); }
       if (opts.length < 2) { setCreateHint("Add at least 2 options."); return; }
-      if (createVT === "ranking") {
+      if (createVT === "ranking" || createVT === "choice") {
         body.rankingOptions = opts.map(function (o) {
           var id = o.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40);
           return { id: id || ("opt" + Math.random().toString(36).slice(2, 7)), label: o };
@@ -1549,6 +1612,7 @@ export function renderCreatePage(): string {
     .join("");
   const types: [string, string, string][] = [
     ["yesno", "Yes / No", "A for-or-against question."],
+    ["choice", "Multiple choice", "Pick one of several options."],
     ["rating", "Rating", "People rate it 1–5."],
     ["ranking", "Ranking", "People order the options."],
     ["aspects", "Aspects", "Thumbs up/down each aspect."],
