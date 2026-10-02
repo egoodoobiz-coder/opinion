@@ -22,6 +22,7 @@ const VOTE_TYPE_LABELS: Record<VotingType, string> = {
   rating: "Rating",
   ranking: "Ranking",
   aspects: "Aspects",
+  choice: "Multiple choice",
 };
 
 const DEMO_COLORS = ["#8b5cf6", "#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#ec4899"];
@@ -60,6 +61,7 @@ export default function AnalyticsScreen() {
       rating: { count: 0, totalEng: 0 },
       ranking: { count: 0, totalEng: 0 },
       aspects: { count: 0, totalEng: 0 },
+      choice: { count: 0, totalEng: 0 },
     };
     myTopics.forEach((t) => {
       byType[t.votingType].count++;

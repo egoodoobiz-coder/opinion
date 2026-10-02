@@ -39,6 +39,7 @@ export default function TopicDetailScreen() {
     voteYesNo,
     voteRating,
     voteRanking,
+    voteChoice,
     voteAspect,
     addComment,
     hideContent,
@@ -148,6 +149,15 @@ export default function TopicDetailScreen() {
   const hasRating = topic.votingType === "rating";
   const hasRanking = topic.votingType === "ranking";
   const hasAspects = topic.votingType === "aspects";
+  const hasChoice = topic.votingType === "choice";
+  // Choice tallies share rankingVotes as { optionId: count }.
+  const choiceCounts: Record<string, number> = {};
+  if (hasChoice && topic.rankingVotes) {
+    for (const [k, v] of Object.entries(topic.rankingVotes as any)) {
+      choiceCounts[k] = typeof v === "number" ? v : Array.isArray(v) ? (v as any[]).length : 0;
+    }
+  }
+  const choiceTotal = Object.values(choiceCounts).reduce((a, b) => a + b, 0);
 
   const s = styles(colors, insets);
 
@@ -312,6 +322,64 @@ export default function TopicDetailScreen() {
                 </Text>
               </PressableScale>
             </View>
+          </View>
+        )}
+
+        {/* ── Multiple Choice ───────────────────────────────────────────── */}
+        {hasChoice && topic.rankingOptions && (
+          <View style={s.section}>
+            <View style={s.sectionHeader}>
+              <Icon name="bar-chart-2" size={15} color={colors.primary} />
+              <Text style={s.sectionTitle}>Multiple Choice</Text>
+              {choiceTotal > 0 && (
+                <Text style={s.voteCount}>{choiceTotal.toLocaleString()} votes</Text>
+              )}
+            </View>
+            <View style={s.choiceList}>
+              {[...topic.rankingOptions]
+                .sort((a, b) => (choiceCounts[b.id] ?? 0) - (choiceCounts[a.id] ?? 0))
+                .map((opt) => {
+                  const count = choiceCounts[opt.id] ?? 0;
+                  const pct = choiceTotal > 0 ? Math.round((count / choiceTotal) * 100) : 0;
+                  const picked = userVote?.ranking?.[0] === opt.id;
+                  return (
+                    <PressableScale
+                      key={opt.id}
+                      containerStyle={s.choiceBtnContainer}
+                      style={[s.choiceBtn, picked && s.choiceBtnActive]}
+                      onPress={() => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                        voteChoice(topic.id, opt.id);
+                      }}
+                    >
+                      <View style={s.choiceRow}>
+                        <Text
+                          style={[s.choiceLabel, picked && { color: colors.primary, fontWeight: "700" }]}
+                          numberOfLines={1}
+                        >
+                          {opt.label}
+                        </Text>
+                        {choiceTotal > 0 && (
+                          <Text style={[s.choicePct, picked && { color: colors.primary }]}>{pct}%</Text>
+                        )}
+                      </View>
+                      {choiceTotal > 0 && (
+                        <View style={{ marginTop: 8 }}>
+                          <AnimatedBar
+                            percent={pct}
+                            color={picked ? colors.primary : colors.rank}
+                            trackColor={colors.muted}
+                            height={6}
+                          />
+                        </View>
+                      )}
+                    </PressableScale>
+                  );
+                })}
+            </View>
+            {choiceTotal === 0 && (
+              <Text style={s.choiceHint}>Tap an option to cast your vote.</Text>
+            )}
           </View>
         )}
 
@@ -791,6 +859,19 @@ const styles = (colors: ReturnType<typeof useColors>, insets: any) =>
       borderTopWidth: 1, borderTopColor: colors.border,
     },
     rankPrompt: { fontSize: 13, color: colors.mutedForeground },
+    choiceList: { gap: 10 },
+    choiceBtnContainer: {},
+    choiceBtn: {
+      backgroundColor: colors.muted, borderWidth: 1, borderColor: colors.border,
+      borderRadius: 14, paddingVertical: 14, paddingHorizontal: 16,
+    },
+    choiceBtnActive: {
+      borderColor: colors.primary, backgroundColor: colors.primary + "1A",
+    },
+    choiceRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 },
+    choiceLabel: { flex: 1, fontSize: 15, fontWeight: "600", color: colors.foreground },
+    choicePct: { fontSize: 14, fontWeight: "700", color: colors.mutedForeground },
+    choiceHint: { fontSize: 13, color: colors.mutedForeground, marginTop: 10 },
     submitRankBtn: {
       flexDirection: "row", alignItems: "center", justifyContent: "center",
       gap: 8, backgroundColor: colors.primary, borderRadius: 14, paddingVertical: 14,

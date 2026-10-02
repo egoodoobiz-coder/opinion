@@ -12,7 +12,7 @@ import React, {
   useState,
 } from "react";
 
-export type VotingType = "yesno" | "rating" | "ranking" | "aspects";
+export type VotingType = "yesno" | "rating" | "ranking" | "aspects" | "choice";
 
 export interface UserDemographics {
   ageRange?: string;
@@ -106,6 +106,7 @@ interface AppContextValue {
   voteYesNo: (topicId: string, vote: "yes" | "no") => void;
   voteRating: (topicId: string, rating: number) => void;
   voteRanking: (topicId: string, orderedIds: string[]) => void;
+  voteChoice: (topicId: string, optionId: string) => void;
   voteAspect: (topicId: string, aspect: string, choice: "up" | "down") => void;
   getUserVote: (topicId: string) => UserVote | undefined;
   followAccount: (userId: string, displayName: string) => void;
@@ -648,6 +649,43 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     [topics, userVotes, userDemographics, saveTopics, saveVotes, requireAuth, postVote]
   );
 
+  // Single-select "multiple choice". Options live in rankingOptions; tallies live
+  // in rankingVotes as { optionId: count } (a number, unlike ranking's number[]);
+  // the voter's pick is stored in userVote.ranking as a single-element array.
+  const voteChoice = useCallback(
+    (topicId: string, optionId: string) => {
+      if (!requireAuth()) return;
+      const snapTopics = topics;
+      const snapVotes = userVotes;
+      const prev = userVotes[topicId];
+      const prevPick = Array.isArray(prev?.ranking) ? prev!.ranking[0] : undefined;
+      if (prevPick === optionId) return;
+      const prevDemo = prev?.voterDemo;
+
+      const updated = topics.map((t) => {
+        if (t.id !== topicId) return t;
+        const rv: Record<string, any> = { ...(t.rankingVotes as any) };
+        if (prevPick && typeof rv[prevPick] === "number") rv[prevPick] = Math.max(0, rv[prevPick] - 1);
+        rv[optionId] = (typeof rv[optionId] === "number" ? rv[optionId] : 0) + 1;
+        let db = t.demoBreakdown ?? {};
+        if (prevDemo && !prevPick) db = applyDemoToBreakdown(db, prevDemo, -1);
+        if (!prevPick && Object.keys(userDemographics).length > 0) {
+          db = applyDemoToBreakdown(db, userDemographics, 1);
+        }
+        return { ...t, rankingVotes: rv as any, demoBreakdown: db };
+      });
+
+      const newVotes = {
+        ...userVotes,
+        [topicId]: { ...prev, topicId, ranking: [optionId], voterDemo: userDemographics },
+      };
+      saveTopics(updated);
+      saveVotes(newVotes);
+      postVote(topicId, { kind: "choice", value: optionId, voterDemo: userDemographics }, snapTopics, snapVotes);
+    },
+    [topics, userVotes, userDemographics, saveTopics, saveVotes, requireAuth, postVote]
+  );
+
   const voteAspect = useCallback(
     (topicId: string, aspect: string, choice: "up" | "down") => {
       if (!requireAuth()) return;
@@ -792,6 +830,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         voteYesNo,
         voteRating,
         voteRanking,
+        voteChoice,
         voteAspect,
         getUserVote,
         followAccount,
