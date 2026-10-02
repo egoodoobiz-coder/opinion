@@ -124,7 +124,7 @@ export default function FeedScreen() {
         ]}
       >
         <View style={s.headerTop}>
-          <Text style={s.logo}>Opinion</Text>
+          <Text style={s.logo}>Factinion</Text>
         </View>
 
         <ScrollView

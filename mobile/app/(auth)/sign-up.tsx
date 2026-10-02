@@ -170,7 +170,7 @@ export default function SignUpScreen() {
           { paddingTop: Platform.OS === "web" ? 80 : insets.top + 60 },
         ]}
       >
-        <Text style={s.logoText}>Opinion</Text>
+        <Text style={s.logoText}>Factinion</Text>
         <Text style={s.title}>Check your email</Text>
         <Text style={s.subtitle}>We sent a verification code to {email}</Text>
 
@@ -226,7 +226,7 @@ export default function SignUpScreen() {
       ]}
       keyboardShouldPersistTaps="handled"
     >
-      <Text style={s.logoText}>Opinion</Text>
+      <Text style={s.logoText}>Factinion</Text>
       <Text style={s.title}>Create an account</Text>
       <Text style={s.subtitle}>Join and start sharing opinions</Text>
 

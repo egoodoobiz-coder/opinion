@@ -129,7 +129,7 @@ export default function SettingsScreen() {
           </View>
           <Pressable
             style={({ pressed }) => [s.row, s.rowBorder, pressed && { opacity: 0.7 }]}
-            onPress={() => Linking.openURL(`mailto:${SUPPORT_EMAIL}?subject=Opinion app feedback`)}
+            onPress={() => Linking.openURL(`mailto:${SUPPORT_EMAIL}?subject=Factinion app feedback`)}
           >
             <View style={s.rowIcon}>
               <Icon name="send" size={16} color={colors.mutedForeground} />

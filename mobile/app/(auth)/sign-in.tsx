@@ -267,7 +267,7 @@ export default function SignInScreen() {
         contentContainerStyle={[s.container, { paddingTop: Platform.OS === "web" ? 80 : insets.top + 60 }]}
         keyboardShouldPersistTaps="handled"
       >
-        <Text style={s.logoText}>Opinion</Text>
+        <Text style={s.logoText}>Factinion</Text>
         <Text style={s.title}>Reset your password</Text>
         <Text style={s.subtitle}>Enter your email and we'll send you a reset code</Text>
 
@@ -318,7 +318,7 @@ export default function SignInScreen() {
         contentContainerStyle={[s.container, { paddingTop: Platform.OS === "web" ? 80 : insets.top + 60 }]}
         keyboardShouldPersistTaps="handled"
       >
-        <Text style={s.logoText}>Opinion</Text>
+        <Text style={s.logoText}>Factinion</Text>
         <Text style={s.title}>Check your email</Text>
         <Text style={s.subtitle}>Enter the code sent to {resetEmail} and choose a new password</Text>
 
@@ -381,7 +381,7 @@ export default function SignInScreen() {
           { paddingTop: Platform.OS === "web" ? 80 : insets.top + 60 },
         ]}
       >
-        <Text style={s.logoText}>Opinion</Text>
+        <Text style={s.logoText}>Factinion</Text>
         <Text style={s.title}>Verify your account</Text>
         <Text style={s.subtitle}>Enter the code sent to your email</Text>
 
@@ -436,7 +436,7 @@ export default function SignInScreen() {
       ]}
       keyboardShouldPersistTaps="handled"
     >
-      <Text style={s.logoText}>Opinion</Text>
+      <Text style={s.logoText}>Factinion</Text>
       <Text style={s.title}>Welcome back</Text>
       <Text style={s.subtitle}>Sign in to share your opinions</Text>
 

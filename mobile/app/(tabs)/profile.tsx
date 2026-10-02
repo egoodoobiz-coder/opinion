@@ -199,7 +199,7 @@ export default function ProfileScreen() {
         </View>
         <View style={s.signInPrompt}>
           <Icon name="user" size={56} color={colors.border} />
-          <Text style={s.signInTitle}>Join Opinion</Text>
+          <Text style={s.signInTitle}>Join Factinion</Text>
           <Text style={s.signInSubtitle}>
             Create an account to vote, post topics, and unlock premium features
           </Text>

@@ -42,7 +42,7 @@ export default function TopicCard({ topic, userVoted }: Props) {
   const isOwnPost = user?.id === topic.createdBy;
   const isFollowed = !isSystem && !isOwnPost && followedAccounts.includes(topic.createdBy);
   const hasNewPost = isFollowed && topic.createdAt > (lastSeenTimestamp[topic.createdBy] ?? 0);
-  const authorName = topic.createdByName ?? (isSystem ? "Opinion" : "Anonymous");
+  const authorName = topic.createdByName ?? (isSystem ? "Factinion" : "Anonymous");
   const authorInitial = authorName[0]?.toUpperCase() ?? "?";
 
   function handleFollowPress() {
