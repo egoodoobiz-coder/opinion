@@ -143,6 +143,58 @@ router.get("/", page("home", (list) => renderPage(list, LIVE_IDS)));
 router.get("/insights", page("insights", renderInsightsPage));
 router.get("/create", (_req, res) => res.type("html").send(renderCreatePage()));
 
+// Owner-only helper: connects the business's existing WhatsApp Business app number
+// to the Cloud API without leaving the app ("coexistence"), via Meta's Embedded
+// Signup. Only a Meta business admin can complete it, so the page holds no secrets.
+// Usage: /connect-whatsapp?config=<Facebook Login for Business configuration id>
+router.get("/connect-whatsapp", (req: any, res: any) => {
+  const config = String(req.query?.config ?? "").replace(/[^0-9]/g, "");
+  res.set("Cache-Control", "no-store");
+  res.type("html").send(`<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex"><title>Connect WhatsApp · Factinion</title>
+<style>
+  body { margin: 0; font-family: system-ui, sans-serif; background: #070a14; color: #e7ecf5; display: grid; place-items: center; min-height: 100vh; padding: 16px; box-sizing: border-box; }
+  .card { max-width: 480px; width: 100%; background: #111827; border: 1px solid #1f2937; border-radius: 16px; padding: 28px; }
+  h1 { font-size: 20px; margin: 0 0 8px; } p { color: #9ca3af; line-height: 1.5; font-size: 14px; }
+  button { font: inherit; font-weight: 600; background: #1877f2; color: #fff; border: 0; border-radius: 10px; padding: 12px 18px; cursor: pointer; width: 100%; margin-top: 8px; }
+  button:disabled { opacity: .5; cursor: default; }
+  pre { background: #0b1220; border-radius: 10px; padding: 12px; white-space: pre-wrap; word-break: break-all; font-size: 12px; color: #a7f3d0; }
+</style></head>
+<body><div class="card">
+  <h1>Connect the Factinion WhatsApp number</h1>
+  <p>Links your WhatsApp Business app number to the Factinion agent. You keep using the app on your phone — chats stay in sync. Have that phone ready to scan a QR code.</p>
+  <button id="go" disabled>${config ? "Loading…" : "Missing ?config= id"}</button>
+  <pre id="out" hidden></pre>
+</div>
+<script>
+  var CONFIG_ID = "${config}";
+  var out = document.getElementById("out");
+  var btn = document.getElementById("go");
+  function show(label, obj) { out.hidden = false; out.textContent += label + ": " + JSON.stringify(obj, null, 2) + "\\n\\n"; }
+  window.addEventListener("message", function (event) {
+    if (!/facebook\\.com$/.test(new URL(event.origin).hostname)) return;
+    try { var data = JSON.parse(event.data); if (data.type === "WA_EMBEDDED_SIGNUP") show("Result", data); } catch (e) {}
+  });
+  window.fbAsyncInit = function () {
+    FB.init({ appId: "2114019372817828", autoLogAppEvents: true, xfbml: true, version: "v23.0" });
+    if (CONFIG_ID) { btn.disabled = false; btn.textContent = "Connect WhatsApp"; }
+  };
+  btn.addEventListener("click", function () {
+    FB.login(function (response) {
+      show("Login", response && response.authResponse ? { ok: true } : { ok: false, status: response && response.status });
+    }, {
+      config_id: CONFIG_ID,
+      response_type: "code",
+      override_default_response_type: true,
+      extras: { setup: {}, featureType: "whatsapp_business_app_onboarding", sessionInfoVersion: "3" }
+    });
+  });
+</script>
+<script async defer crossorigin="anonymous" src="https://connect.facebook.net/en_US/sdk.js"></script>
+</body></html>`);
+});
+
 // The branded link-preview image (Open Graph / Twitter), referenced by og:image.
 const OG_PNG = Buffer.from(OG_PNG_BASE64, "base64");
 router.get("/og.png", (_req, res) => {
