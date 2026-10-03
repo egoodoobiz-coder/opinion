@@ -519,6 +519,7 @@ function shell(o: ShellOptions): string {
   h1, h2, h3, .big, .stat-n, .callout-value, .brand, .pick-winner {
     font-family: "Space Grotesk", "Inter", sans-serif;
   }
+  html, body { overflow-x: clip; }
   .wrap { max-width: 1120px; margin: 0 auto; padding: 0 20px; }
   a { color: inherit; }
 
@@ -993,7 +994,7 @@ function shell(o: ShellOptions): string {
   @media (max-width: 600px) {
     .hero { padding: 52px 0 28px; }
     .top nav { gap: 12px; }
-    .top nav a.hide-sm { display: none; }
+    .top nav a.hide-sm, .top nav .live-dot { display: none; }
     .grid { grid-template-columns: 1fr; }
     .detail-cta { flex-direction: column; align-items: flex-start; }
   }
@@ -1014,7 +1015,7 @@ function shell(o: ShellOptions): string {
     <nav>
       <span class="live-dot"><i></i>LIVE</span>
       <a href="/"${resultsOn ? ' class="on"' : ""}>Results</a>
-      <a href="/insights"${insightsOn ? ' class="on"' : ""}>Insights</a>
+      <a href="/insights" class="hide-sm${insightsOn ? " on" : ""}">Insights</a>
       <a href="/create"${o.path === "/create" ? ' class="on"' : ""}>Create</a>
       <span id="authslot" class="authslot"></span>
       <a href="${PLAY_URL}" class="nav-cta hide-sm">Get the app</a>
