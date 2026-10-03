@@ -40,6 +40,7 @@ const IG_TOKEN = process.env.IG_TOKEN || "";
 const IG_USER_ID = process.env.IG_USER_ID || "";
 const IG_USERNAME = (process.env.IG_USERNAME || "factinion.app").toLowerCase();
 const IG_DM_NOTICE = "Sent you the link in DM 📩";
+const IG_TRIGGER = /\b(link|vote|poll)\b/i;
 const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY || "";
 const AI_MODEL = process.env.AGENT_MODEL || "claude-haiku-4-5-20251001";
 
@@ -342,10 +343,58 @@ async function onInstagramComment(v: any) {
   const text = String(v.text ?? "");
   if (text.trim() === IG_DM_NOTICE) return;
   const topicId = matchKeyword(text);
-  if (!topicId && !/\b(link|vote|poll)\b/i.test(text)) return;
+  if (!topicId && !IG_TRIGGER.test(text)) return;
   const url = topicId ? link(topicId) : SITE;
   await igSend({ comment_id: commentId }, `Here's your link to vote 👇\n${url}\n\nOne tap, no sign-up — results update live!`);
   await igReplyToComment(commentId, IG_DM_NOTICE);
+}
+
+// Until Meta's App Review grants Advanced Access, Instagram only sends comment
+// webhooks for accounts with a role on the app — but the API can still read our
+// own posts' comments and private-reply to them. So also poll recent posts for
+// new trigger comments. A comment whose thread already holds our "check your
+// DMs" reply is skipped, so restarts never double-reply.
+const IG_POLL_MS = 60_000;
+const IG_POLL_WINDOW_MS = 24 * 60 * 60 * 1000; // private replies need a fresh comment
+const polled = new Set<string>();
+let polling = false;
+
+async function igGet(path: string): Promise<any> {
+  const sep = path.includes("?") ? "&" : "?";
+  const r = await fetch(`https://graph.instagram.com/${GRAPH}/${path}${sep}access_token=${encodeURIComponent(IG_TOKEN)}`);
+  if (!r.ok) throw new Error(`Instagram GET ${path.split("?")[0]} -> ${r.status}: ${await r.text()}`);
+  return r.json();
+}
+
+export async function pollInstagramComments() {
+  if (polling) return;
+  polling = true;
+  try {
+    const media = await igGet(`${IG_USER_ID || "me"}/media?fields=id&limit=5`);
+    for (const m of media.data ?? []) {
+      const comments = await igGet(`${m.id}/comments?fields=id,text,timestamp,from&limit=50`);
+      for (const c of comments.data ?? []) {
+        if (!c?.id || polled.has(c.id)) continue;
+        polled.add(c.id);
+        if (polled.size > 5000) polled.delete(polled.values().next().value as string);
+        if (Date.now() - Date.parse(c.timestamp) > IG_POLL_WINDOW_MS) continue;
+        const text = String(c.text ?? "");
+        if (!matchKeyword(text) && !IG_TRIGGER.test(text)) continue;
+        const replies = await igGet(`${c.id}/replies?fields=text`);
+        if ((replies.data ?? []).some((r: any) => String(r.text ?? "").trim() === IG_DM_NOTICE)) continue;
+        await safe(() => onInstagramComment({ id: c.id, text, from: c.from }));
+      }
+    }
+  } catch (err) {
+    logger.error({ err: String(err) }, "instagram comment poll failed");
+  } finally {
+    polling = false;
+  }
+}
+
+if (IG_TOKEN && process.env.IG_POLL_COMMENTS !== "off") {
+  setTimeout(pollInstagramComments, 10_000).unref();
+  setInterval(pollInstagramComments, IG_POLL_MS).unref();
 }
 
 async function onInstagramMessage(ev: any) {
