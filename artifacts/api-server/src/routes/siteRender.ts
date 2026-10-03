@@ -1039,7 +1039,7 @@ function shell(o: ShellOptions): string {
     <a href="/child-safety">Child safety standards</a>
     <a href="/delete-account">Delete your account</a>
     <a href="mailto:akshay21790@gmail.com">Contact</a>
-    <span class="copy">Factinion — ask anything, vote on everything.</span>
+    <span class="copy">Factinion — ask anything, vote on everything. © EGOODOO PRIVATE LIMITED. Factinion and EGOODOO are trademarks of EGOODOO PRIVATE LIMITED.</span>
   </div>
 </footer>
 
