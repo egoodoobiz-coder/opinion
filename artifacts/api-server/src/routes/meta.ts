@@ -38,6 +38,8 @@ const WA_TOKEN = process.env.WA_TOKEN || "";
 const WA_PHONE_ID = process.env.WA_PHONE_NUMBER_ID || "";
 const IG_TOKEN = process.env.IG_TOKEN || "";
 const IG_USER_ID = process.env.IG_USER_ID || "";
+const IG_USERNAME = (process.env.IG_USERNAME || "factinion.app").toLowerCase();
+const IG_DM_NOTICE = "Sent you the link in DM 📩";
 const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY || "";
 const AI_MODEL = process.env.AGENT_MODEL || "claude-haiku-4-5-20251001";
 
@@ -333,13 +335,17 @@ async function igReplyToComment(commentId: string, message: string) {
 async function onInstagramComment(v: any) {
   const commentId = v?.id;
   if (!commentId || !firstTime("igc:" + commentId)) return;
-  if (IG_USER_ID && v.from?.id === IG_USER_ID) return; // our own replies
+  // Never answer our own comments (incl. the "check your DMs" reply below, which
+  // contains the trigger word "link") — matched by id, username and exact text.
+  if (IG_USER_ID && v.from?.id === IG_USER_ID) return;
+  if (IG_USERNAME && String(v.from?.username ?? "").toLowerCase() === IG_USERNAME) return;
   const text = String(v.text ?? "");
+  if (text.trim() === IG_DM_NOTICE) return;
   const topicId = matchKeyword(text);
   if (!topicId && !/\b(link|vote|poll)\b/i.test(text)) return;
   const url = topicId ? link(topicId) : SITE;
   await igSend({ comment_id: commentId }, `Here's your link to vote 👇\n${url}\n\nOne tap, no sign-up — results update live!`);
-  await igReplyToComment(commentId, "Sent you the link in DM 📩");
+  await igReplyToComment(commentId, IG_DM_NOTICE);
 }
 
 async function onInstagramMessage(ev: any) {
