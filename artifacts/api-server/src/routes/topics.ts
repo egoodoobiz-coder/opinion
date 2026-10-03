@@ -262,128 +262,133 @@ router.post("/topics", async (req: any, res) => {
   }
 });
 
-// POST /topics/:id/vote — cast or change a vote (auth required). Transactional so
-// the denormalised aggregates stay consistent. Body kinds mirror the app's
-// voteYesNo / voteRating / voteRanking / voteAspect.
+// Cast or change one voter's vote. Transactional so the denormalised aggregates
+// stay consistent. Shared by the HTTP route below and the WhatsApp agent, so a
+// vote counts identically wherever it comes from. Body kinds mirror the app's
+// voteYesNo / voteRating / voteRanking / voteAspect / voteChoice.
+export async function applyVote(topicId: string, userId: string, body: any) {
+  const kind = body?.kind;
+  const voterDemo: Demo | null = body?.voterDemo ?? null;
+  return db.transaction(async (tx) => {
+    const [topic] = await tx.select().from(topics).where(eq(topics.id, topicId));
+    if (!topic) return { error: 404 as const };
+    const [prev] = await tx.select().from(topicVotes).where(and(eq(topicVotes.topicId, topicId), eq(topicVotes.userId, userId)));
+
+    const patch: any = {};
+    const votePatch: any = { yesno: prev?.yesno ?? null, rating: prev?.rating ?? null, ranking: prev?.ranking ?? null, aspectChoices: prev?.aspectChoices ?? null };
+
+    if (kind === "yesno") {
+      const value = body.value === "yes" ? "yes" : body.value === "no" ? "no" : null;
+      if (!value) return { error: 400 as const };
+      let { yesCount, noCount } = topic;
+      if (prev?.yesno === "yes") yesCount--;
+      if (prev?.yesno === "no") noCount--;
+      if (value === "yes") yesCount++; else noCount++;
+      let demo = (topic.demoBreakdown as DemoBreakdown) ?? {};
+      if (prev?.voterDemo) demo = applyDemo(demo, prev.voterDemo as Demo, -1);
+      if (demoHasKeys(voterDemo)) demo = applyDemo(demo, voterDemo, 1);
+      patch.yesCount = Math.max(0, yesCount);
+      patch.noCount = Math.max(0, noCount);
+      patch.demoBreakdown = demo;
+      votePatch.yesno = value;
+    } else if (kind === "rating") {
+      const value = Number(body.value);
+      if (!Number.isFinite(value) || value < 1 || value > 5) return { error: 400 as const };
+      let { totalRating, ratingCount } = topic;
+      const hadRating = prev?.rating != null;
+      if (hadRating) { totalRating -= prev!.rating!; ratingCount--; }
+      totalRating += value; ratingCount++;
+      let demo = (topic.demoBreakdown as DemoBreakdown) ?? {};
+      if (!hadRating && demoHasKeys(voterDemo)) demo = applyDemo(demo, voterDemo, 1);
+      patch.totalRating = Math.max(0, totalRating);
+      patch.ratingCount = Math.max(0, ratingCount);
+      patch.demoBreakdown = demo;
+      votePatch.rating = value;
+    } else if (kind === "ranking") {
+      const ordered: string[] = Array.isArray(body.value) ? body.value : [];
+      if (!ordered.length) return { error: 400 as const };
+      const rankingVotes: Record<string, number[]> = { ...((topic.rankingVotes as any) ?? {}) };
+      const prevRanking: string[] | null = (prev?.ranking as any) ?? null;
+      if (prevRanking) {
+        prevRanking.forEach((optId, idx) => {
+          const rank = idx + 1;
+          if (rankingVotes[optId]) rankingVotes[optId] = rankingVotes[optId].filter((r) => r !== rank);
+        });
+      }
+      ordered.forEach((optId, idx) => {
+        const rank = idx + 1;
+        (rankingVotes[optId] ??= []).push(rank);
+      });
+      let demo = (topic.demoBreakdown as DemoBreakdown) ?? {};
+      if (prev?.voterDemo && !prevRanking) demo = applyDemo(demo, prev.voterDemo as Demo, -1);
+      if (!prevRanking && demoHasKeys(voterDemo)) demo = applyDemo(demo, voterDemo, 1);
+      patch.rankingVotes = rankingVotes;
+      patch.demoBreakdown = demo;
+      votePatch.ranking = ordered;
+    } else if (kind === "aspect") {
+      const aspect = body.aspect;
+      const choice = body.choice === "up" ? "up" : body.choice === "down" ? "down" : null;
+      if (typeof aspect !== "string" || !choice) return { error: 400 as const };
+      const aspectVotes: Record<string, { up: number; down: number }> = { ...((topic.aspectVotes as any) ?? {}) };
+      const cur = { ...(aspectVotes[aspect] ?? { up: 0, down: 0 }) };
+      const prevChoices: Record<string, "up" | "down"> = (prev?.aspectChoices as any) ?? {};
+      const prevChoice = prevChoices[aspect];
+      if (prevChoice === choice) {
+        cur[choice] = Math.max(0, cur[choice] - 1);
+      } else {
+        if (prevChoice === "up") cur.up = Math.max(0, cur.up - 1);
+        if (prevChoice === "down") cur.down = Math.max(0, cur.down - 1);
+        cur[choice]++;
+      }
+      aspectVotes[aspect] = cur;
+      const isFirstAspectVote = Object.keys(prevChoices).length === 0;
+      let demo = (topic.demoBreakdown as DemoBreakdown) ?? {};
+      if (isFirstAspectVote && demoHasKeys(voterDemo)) demo = applyDemo(demo, voterDemo, 1);
+      const nextChoices = { ...prevChoices };
+      if (prevChoice === choice) delete nextChoices[aspect]; else nextChoices[aspect] = choice;
+      patch.aspectVotes = aspectVotes;
+      patch.demoBreakdown = demo;
+      votePatch.aspectChoices = nextChoices;
+    } else if (kind === "choice") {
+      // Single-select poll ("pick one of many"). Options live in rankingOptions;
+      // tallies are stored in rankingVotes as { optionId: count }; the voter's
+      // pick is stored in topicVotes.ranking as a single-element array [optionId].
+      const optId = typeof body.value === "string" ? body.value : null;
+      if (!optId) return { error: 400 as const };
+      const choiceVotes: Record<string, number> = { ...((topic.rankingVotes as any) ?? {}) };
+      const prevPick: string | null = Array.isArray(prev?.ranking) ? ((prev!.ranking as any)[0] ?? null) : null;
+      if (prevPick === optId) return { error: 400 as const }; // no-op: already their pick
+      if (prevPick && choiceVotes[prevPick]) choiceVotes[prevPick] = Math.max(0, choiceVotes[prevPick] - 1);
+      choiceVotes[optId] = (Number(choiceVotes[optId]) || 0) + 1;
+      let demo = (topic.demoBreakdown as DemoBreakdown) ?? {};
+      if (!prevPick && demoHasKeys(voterDemo)) demo = applyDemo(demo, voterDemo, 1);
+      patch.rankingVotes = choiceVotes as any;
+      patch.demoBreakdown = demo;
+      votePatch.ranking = [optId];
+    } else {
+      return { error: 400 as const };
+    }
+
+    await tx.update(topics).set(patch).where(eq(topics.id, topicId));
+
+    if (prev) {
+      await tx.update(topicVotes).set({ ...votePatch, voterDemo, updatedAt: new Date() })
+        .where(eq(topicVotes.id, prev.id));
+    } else {
+      await tx.insert(topicVotes).values({ id: randomUUID(), topicId, userId, ...votePatch, voterDemo });
+    }
+    return { ok: true as const };
+  });
+}
+
+// POST /topics/:id/vote — cast or change a vote (Clerk user or anonymous id).
 router.post("/topics/:id/vote", async (req: any, res) => {
   try {
     const userId = await getVoterId(req);
     if (!userId) return res.status(401).json({ error: "Unauthorized" });
 
     const topicId = req.params.id;
-    const kind = req.body?.kind;
-    const voterDemo: Demo | null = req.body?.voterDemo ?? null;
-
-    const result = await db.transaction(async (tx) => {
-      const [topic] = await tx.select().from(topics).where(eq(topics.id, topicId));
-      if (!topic) return { error: 404 as const };
-      const [prev] = await tx.select().from(topicVotes).where(and(eq(topicVotes.topicId, topicId), eq(topicVotes.userId, userId)));
-
-      const patch: any = {};
-      const votePatch: any = { yesno: prev?.yesno ?? null, rating: prev?.rating ?? null, ranking: prev?.ranking ?? null, aspectChoices: prev?.aspectChoices ?? null };
-
-      if (kind === "yesno") {
-        const value = req.body.value === "yes" ? "yes" : req.body.value === "no" ? "no" : null;
-        if (!value) return { error: 400 as const };
-        let { yesCount, noCount } = topic;
-        if (prev?.yesno === "yes") yesCount--;
-        if (prev?.yesno === "no") noCount--;
-        if (value === "yes") yesCount++; else noCount++;
-        let demo = (topic.demoBreakdown as DemoBreakdown) ?? {};
-        if (prev?.voterDemo) demo = applyDemo(demo, prev.voterDemo as Demo, -1);
-        if (demoHasKeys(voterDemo)) demo = applyDemo(demo, voterDemo, 1);
-        patch.yesCount = Math.max(0, yesCount);
-        patch.noCount = Math.max(0, noCount);
-        patch.demoBreakdown = demo;
-        votePatch.yesno = value;
-      } else if (kind === "rating") {
-        const value = Number(req.body.value);
-        if (!Number.isFinite(value) || value < 1 || value > 5) return { error: 400 as const };
-        let { totalRating, ratingCount } = topic;
-        const hadRating = prev?.rating != null;
-        if (hadRating) { totalRating -= prev!.rating!; ratingCount--; }
-        totalRating += value; ratingCount++;
-        let demo = (topic.demoBreakdown as DemoBreakdown) ?? {};
-        if (!hadRating && demoHasKeys(voterDemo)) demo = applyDemo(demo, voterDemo, 1);
-        patch.totalRating = Math.max(0, totalRating);
-        patch.ratingCount = Math.max(0, ratingCount);
-        patch.demoBreakdown = demo;
-        votePatch.rating = value;
-      } else if (kind === "ranking") {
-        const ordered: string[] = Array.isArray(req.body.value) ? req.body.value : [];
-        if (!ordered.length) return { error: 400 as const };
-        const rankingVotes: Record<string, number[]> = { ...((topic.rankingVotes as any) ?? {}) };
-        const prevRanking: string[] | null = (prev?.ranking as any) ?? null;
-        if (prevRanking) {
-          prevRanking.forEach((optId, idx) => {
-            const rank = idx + 1;
-            if (rankingVotes[optId]) rankingVotes[optId] = rankingVotes[optId].filter((r) => r !== rank);
-          });
-        }
-        ordered.forEach((optId, idx) => {
-          const rank = idx + 1;
-          (rankingVotes[optId] ??= []).push(rank);
-        });
-        let demo = (topic.demoBreakdown as DemoBreakdown) ?? {};
-        if (prev?.voterDemo && !prevRanking) demo = applyDemo(demo, prev.voterDemo as Demo, -1);
-        if (!prevRanking && demoHasKeys(voterDemo)) demo = applyDemo(demo, voterDemo, 1);
-        patch.rankingVotes = rankingVotes;
-        patch.demoBreakdown = demo;
-        votePatch.ranking = ordered;
-      } else if (kind === "aspect") {
-        const aspect = req.body.aspect;
-        const choice = req.body.choice === "up" ? "up" : req.body.choice === "down" ? "down" : null;
-        if (typeof aspect !== "string" || !choice) return { error: 400 as const };
-        const aspectVotes: Record<string, { up: number; down: number }> = { ...((topic.aspectVotes as any) ?? {}) };
-        const cur = { ...(aspectVotes[aspect] ?? { up: 0, down: 0 }) };
-        const prevChoices: Record<string, "up" | "down"> = (prev?.aspectChoices as any) ?? {};
-        const prevChoice = prevChoices[aspect];
-        if (prevChoice === choice) {
-          cur[choice] = Math.max(0, cur[choice] - 1);
-        } else {
-          if (prevChoice === "up") cur.up = Math.max(0, cur.up - 1);
-          if (prevChoice === "down") cur.down = Math.max(0, cur.down - 1);
-          cur[choice]++;
-        }
-        aspectVotes[aspect] = cur;
-        const isFirstAspectVote = Object.keys(prevChoices).length === 0;
-        let demo = (topic.demoBreakdown as DemoBreakdown) ?? {};
-        if (isFirstAspectVote && demoHasKeys(voterDemo)) demo = applyDemo(demo, voterDemo, 1);
-        const nextChoices = { ...prevChoices };
-        if (prevChoice === choice) delete nextChoices[aspect]; else nextChoices[aspect] = choice;
-        patch.aspectVotes = aspectVotes;
-        patch.demoBreakdown = demo;
-        votePatch.aspectChoices = nextChoices;
-      } else if (kind === "choice") {
-        // Single-select poll ("pick one of many"). Options live in rankingOptions;
-        // tallies are stored in rankingVotes as { optionId: count }; the voter's
-        // pick is stored in topicVotes.ranking as a single-element array [optionId].
-        const optId = typeof req.body.value === "string" ? req.body.value : null;
-        if (!optId) return { error: 400 as const };
-        const choiceVotes: Record<string, number> = { ...((topic.rankingVotes as any) ?? {}) };
-        const prevPick: string | null = Array.isArray(prev?.ranking) ? ((prev!.ranking as any)[0] ?? null) : null;
-        if (prevPick === optId) return { error: 400 as const }; // no-op: already their pick
-        if (prevPick && choiceVotes[prevPick]) choiceVotes[prevPick] = Math.max(0, choiceVotes[prevPick] - 1);
-        choiceVotes[optId] = (Number(choiceVotes[optId]) || 0) + 1;
-        let demo = (topic.demoBreakdown as DemoBreakdown) ?? {};
-        if (!prevPick && demoHasKeys(voterDemo)) demo = applyDemo(demo, voterDemo, 1);
-        patch.rankingVotes = choiceVotes as any;
-        patch.demoBreakdown = demo;
-        votePatch.ranking = [optId];
-      } else {
-        return { error: 400 as const };
-      }
-
-      await tx.update(topics).set(patch).where(eq(topics.id, topicId));
-
-      if (prev) {
-        await tx.update(topicVotes).set({ ...votePatch, voterDemo, updatedAt: new Date() })
-          .where(eq(topicVotes.id, prev.id));
-      } else {
-        await tx.insert(topicVotes).values({ id: randomUUID(), topicId, userId, ...votePatch, voterDemo });
-      }
-      return { ok: true as const };
-    });
+    const result = await applyVote(topicId, userId, req.body ?? {});
 
     if ("error" in result) {
       const code = result.error as number;

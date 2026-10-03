@@ -6,6 +6,7 @@ import privacyRouter from "./routes/privacy";
 import deleteAccountRouter from "./routes/deleteAccount";
 import childSafetyRouter from "./routes/childSafety";
 import siteRouter from "./routes/site";
+import metaRouter from "./routes/meta";
 import { WebhookHandlers } from "./webhookHandlers";
 import { logger } from "./lib/logger";
 
@@ -60,7 +61,11 @@ app.post(
   }
 );
 
-const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(",").map((o) => o.trim()) ?? [];
+// WhatsApp + Instagram agents. Also needs the raw body (signature check), so it
+// is mounted before express.json() too.
+app.use("/api/meta/webhook", metaRouter);
+
+const allowedOrigins =process.env.ALLOWED_ORIGINS?.split(",").map((o) => o.trim()) ?? [];
 app.use(
   cors({
     origin: (origin, callback) => {

@@ -25,7 +25,7 @@ const CACHE_MS = 15000;
 // The polls to surface in the homepage "LIVE" section (actively promoted). Other
 // polls appear below under "Other opinions". Set SITE_FEATURED_TOPIC_IDS
 // (comma-separated) to change which are featured, or "all" for a single feed.
-const FEATURED_TOPIC_IDS = (
+export const FEATURED_TOPIC_IDS = (
   process.env.SITE_FEATURED_TOPIC_IDS ??
   "4108e5c0-dea3-41e4-9923-106b70d2484d,073a404c-adad-47b6-88ad-03cb8e3c48ef"
 )
