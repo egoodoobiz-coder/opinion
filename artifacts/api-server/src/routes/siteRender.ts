@@ -467,6 +467,32 @@ interface ShellOptions {
   body: string;
 }
 
+// Search: Google Search Console ownership tag (set in Railway when verifying), and
+// structured data so Google ties the brand name "Factinion" to this site.
+const GOOGLE_SITE_VERIFICATION = process.env.GOOGLE_SITE_VERIFICATION || "";
+const BRAND_JSONLD = JSON.stringify([
+  {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    name: "Factinion",
+    alternateName: "factinion.com",
+    url: "https://factinion.com/",
+  },
+  {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    name: "Factinion",
+    url: "https://factinion.com/",
+    logo: "https://factinion.com/favicon.svg",
+    description: "Factinion is a live opinion platform: real polls, ratings and rankings on food, sports and everyday debates, with results updating as people vote.",
+    sameAs: [PLAY_URL, "https://www.instagram.com/factinion.app/"],
+    parentOrganization: { "@type": "Organization", name: "EGOODOO PRIVATE LIMITED" },
+  },
+]).replace(/</g, "\\u003c");
+
+// Brand mark served as a real file (Google won't show data-URI favicons in results).
+export const FAVICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200"><rect width="200" height="200" rx="44" fill="#070a14"/><path d="M56 50 h88 a16 16 0 0 1 16 16 v54 a16 16 0 0 1 -16 16 h-46 l-28 26 v-26 h-14 a16 16 0 0 1 -16 -16 v-54 a16 16 0 0 1 16 -16 z" fill="none" stroke="#22d3ee" stroke-width="11" stroke-linejoin="round"/><rect x="74" y="66" width="56" height="17" rx="5" fill="#00d68f"/><rect x="74" y="93" width="40" height="17" rx="5" fill="#ff4d5e"/></svg>`;
+
 function shell(o: ShellOptions): string {
   const resultsOn = o.path === "/" || o.path.startsWith("/topic");
   const insightsOn = o.path === "/insights";
@@ -482,6 +508,9 @@ function shell(o: ShellOptions): string {
 <meta property="og:description" content="${esc(o.description)}">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://factinion.com${esc(o.path)}">
+<link rel="canonical" href="https://factinion.com${esc(o.path)}">${GOOGLE_SITE_VERIFICATION ? `
+<meta name="google-site-verification" content="${esc(GOOGLE_SITE_VERIFICATION)}">` : ""}
+<script type="application/ld+json">${BRAND_JSONLD}</script>
 <meta property="og:image" content="https://factinion.com/og.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
@@ -490,7 +519,7 @@ function shell(o: ShellOptions): string {
 <meta name="twitter:title" content="${esc(o.title)}">
 <meta name="twitter:description" content="${esc(o.description)}">
 <meta name="twitter:image" content="https://factinion.com/og.png">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'%3E%3Crect width='200' height='200' rx='44' fill='%23070a14'/%3E%3Cpath d='M56 50 h88 a16 16 0 0 1 16 16 v54 a16 16 0 0 1 -16 16 h-46 l-28 26 v-26 h-14 a16 16 0 0 1 -16 -16 v-54 a16 16 0 0 1 16 -16 z' fill='none' stroke='%2322d3ee' stroke-width='11' stroke-linejoin='round'/%3E%3Crect x='74' y='66' width='56' height='17' rx='5' fill='%2300d68f'/%3E%3Crect x='74' y='93' width='40' height='17' rx='5' fill='%23ff4d5e'/%3E%3C/svg%3E">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">

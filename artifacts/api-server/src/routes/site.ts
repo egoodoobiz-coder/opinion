@@ -10,6 +10,7 @@ import {
   renderTopicPage,
   renderCreatePage,
   renderNotFound,
+  FAVICON_SVG,
   type SiteTopic,
   type SiteComment,
   type AspectVotes,
@@ -142,6 +143,41 @@ function page(key: string, render: (list: SiteTopic[]) => string) {
 router.get("/", page("home", (list) => renderPage(list, LIVE_IDS)));
 router.get("/insights", page("insights", renderInsightsPage));
 router.get("/create", (_req, res) => res.type("html").send(renderCreatePage()));
+
+// --- Search engines -------------------------------------------------------
+router.get("/robots.txt", (_req, res) => {
+  res.type("text/plain").send(
+    ["User-agent: *", "Allow: /", "Disallow: /api/", "Disallow: /connect-whatsapp", "", "Sitemap: https://factinion.com/sitemap.xml", ""].join("\n"),
+  );
+});
+
+router.get("/sitemap.xml", async (_req, res) => {
+  try {
+    const list = await loadTopics();
+    const day = (ms: number) => new Date(ms).toISOString().slice(0, 10);
+    const newest = list.length ? Math.max(...list.map((t) => t.createdAt)) : Date.now();
+    const urls = [
+      { loc: "https://factinion.com/", lastmod: day(newest) },
+      { loc: "https://factinion.com/insights", lastmod: day(newest) },
+      { loc: "https://factinion.com/create" },
+      { loc: "https://factinion.com/privacy" },
+      ...list.map((t) => ({ loc: `https://factinion.com/topic/${encodeURIComponent(t.id)}`, lastmod: day(t.createdAt) })),
+    ];
+    const body = urls
+      .map((u) => `  <url><loc>${u.loc}</loc>${u.lastmod ? `<lastmod>${u.lastmod}</lastmod>` : ""}</url>`)
+      .join("\n");
+    res.set("Cache-Control", "public, max-age=3600");
+    res.type("application/xml").send(`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${body}\n</urlset>\n`);
+  } catch (err) {
+    logger.error({ err }, "sitemap error");
+    res.status(500).type("text/plain").send("sitemap unavailable");
+  }
+});
+
+router.get("/favicon.svg", (_req, res) => {
+  res.set("Cache-Control", "public, max-age=86400");
+  res.type("image/svg+xml").send(FAVICON_SVG);
+});
 
 // Owner-only helper: connects the business's existing WhatsApp Business app number
 // to the Cloud API without leaving the app ("coexistence"), via Meta's Embedded
