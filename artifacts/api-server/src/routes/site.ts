@@ -28,7 +28,7 @@ const CACHE_MS = 15000;
 // (comma-separated) to change which are featured, or "all" for a single feed.
 export const FEATURED_TOPIC_IDS = (
   process.env.SITE_FEATURED_TOPIC_IDS ??
-  "4108e5c0-dea3-41e4-9923-106b70d2484d,073a404c-adad-47b6-88ad-03cb8e3c48ef"
+  "117512d1-51a8-40c0-8e3d-8d0d3a70071e,4108e5c0-dea3-41e4-9923-106b70d2484d,073a404c-adad-47b6-88ad-03cb8e3c48ef"
 )
   .split(",")
   .map((s) => s.trim())

@@ -46,13 +46,17 @@ const AI_MODEL = process.env.AGENT_MODEL || "claude-haiku-4-5-20251001";
 
 const DBC_ID = "4108e5c0-dea3-41e4-9923-106b70d2484d";
 const KOHLI_ID = "073a404c-adad-47b6-88ad-03cb8e3c48ef";
+const STARLINK_ID = "117512d1-51a8-40c0-8e3d-8d0d3a70071e";
 const KEYWORDS: Record<string, string> = (() => {
   try {
     if (process.env.AGENT_KEYWORDS) return JSON.parse(process.env.AGENT_KEYWORDS);
   } catch (err) {
     logger.error({ err }, "AGENT_KEYWORDS is not valid JSON; using defaults");
   }
-  return { dbc: DBC_ID, "death by chocolate": DBC_ID, kohli: KOHLI_ID, goat: KOHLI_ID };
+  return {
+    dbc: DBC_ID, "death by chocolate": DBC_ID, kohli: KOHLI_ID, goat: KOHLI_ID,
+    starlink: STARLINK_ID, musk: STARLINK_ID,
+  };
 })();
 
 // ---------- webhook endpoints ----------
